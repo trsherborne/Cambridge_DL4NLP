@@ -381,7 +381,7 @@ def train_network(model, num_epochs, batch_size, data_dir, save_dir,
 
 
 def evaluate_model(sess, data_dir, input_node, target_node, prediction,
-                   loss, embs, out_form="cosine"):
+                   loss, rev_vocab, vocab, embs, out_form="cosine", verbose=True):
     # read the development and test data using gen_epochs
     # use sess.run and feed_dict to get a prediction
     # (as numpy variable)
@@ -389,7 +389,62 @@ def evaluate_model(sess, data_dir, input_node, target_node, prediction,
     # also print out the rank for each of the 200 instances
     # to see where the model does well, and badly!
     
-    print("evaluate_model() needs implementing!!!")
+    num_epochs = 1
+    batch_size = 1
+    vocab_size = 100000
+    
+    ranks = []
+    total_loss = []
+    
+    import pdb; pdb.set_trace()
+    for idx, (glosses, heads) in enumerate(gen_epochs(data_dir, num_epochs, batch_size, vocab_size, phase='dev')):
+        
+        if verbose:
+            print('Evaluation step %d...' % (idx + 1))
+        
+        import pdb; pdb.set_trace()
+        
+        # Get the predictions and the batch validation loss
+        batch_pred, batch_val_loss = sess.run(fetches=[prediction, loss],
+                                              feed_dict={input_node: glosses,
+                                                         target_node: heads})
+        
+        total_loss.append(np.squeeze(batch_val_loss))
+        pdb.set_trace()
+        
+        if out_form == "cosine":
+            for head_, prediction_ in zip(heads, batch_pred):
+                # Get cosine distance across the vocabulary
+                cosine_distance = np.squeeze(dist.cdist(prediction_, embs, metric="cosine"))
+                cosine_distance = np.nan_to_num(cosine_distance)
+                
+                # Rank vocabulary by cosine distance
+                rank_cands = np.argsort(cosine_distance)
+                
+                # Get the rank of the ground-truth head word by index
+                head_rank = np.asscalar(np.squeeze(np.where(rank_cands == head_)))
+                ranks.append(head_rank)
+        
+        elif out_form == "softmax":
+            # Handle output from session as the ranking over the vocab
+            pdb.set_trace()
+            
+            # Get IDs of the vocabulary (excluding the first two vocab elements padding and _UNK todo: Check this is correct
+            rank_cands = np.squeeze(batch_pred)[2:].argsort() + 2
+            
+            head_rank = np.asscalar(np.squeeze(np.where(rank_cands == head_)))
+            ranks.append(head_rank)
+        
+        print("----------------------------")
+        print("HEADWORD -> %s" % rev_vocab[head_])
+        print("    RANK -> %d" % head_rank)
+        print("----------------------------")
+    
+    median_rank = np.asscalar(np.median(ranks))
+    mean_loss = np.asscalar(np.mean(total_loss))
+    print('Median rank %.1f / Validation loss %.5f' % (median_rank, mean_loss))
+    
+    return ranks, median_rank, total_loss, mean_loss
 
 
 def restore_model(sess, save_dir, vocab_file, out_form):
@@ -559,9 +614,16 @@ def main(unused_argv):
                                             out_form="cosine")
                 
                 if FLAGS.evaluate:
-                    evaluate_model(sess, FLAGS.data_dir,
-                                   input_node, target_node,
-                                   predictions, loss, embs=pre_embs, out_form="cosine")
+                    evaluate_model(sess=sess,
+                                   data_dir=FLAGS.data_dir,
+                                   input_node=input_node,
+                                   target_node=target_node,
+                                   prediction=predictions,
+                                   loss=loss,
+                                   rev_vocab=rev_vocab,
+                                   vocab=vocab,
+                                   embs=pre_embs,
+                                   out_form="cosine")
                 
                 # Load the final saved model and run querying routine.
                 query_model(sess, input_node, predictions,
