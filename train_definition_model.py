@@ -492,6 +492,7 @@ def restore_model(sess, save_dir, vocab_file, out_form):
     # Get checkpoint in dir
     model_path = tf.train.latest_checkpoint(save_dir)
 
+    import pdb;pdb.set_trace()
     global_step = int(os.path.basename(model_path).split('-')[1])
 
     # restore the model from the meta graph
