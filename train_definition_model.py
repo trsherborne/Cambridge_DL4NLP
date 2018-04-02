@@ -438,20 +438,18 @@ def evaluate_model(sess, data_dir, input_node, target_node, prediction,
             
             if verbose:
                 print('Evaluation step %d...' % (b_idx + 1))
-        
-            import pdb; pdb.set_trace()
-        
+                
             # Get the predictions and the batch validation loss
             batch_pred, batch_val_loss = sess.run(fetches=[prediction, loss],
                                                   feed_dict={input_node: glosses,
                                                              target_node: heads})
-
+            
             total_loss.append(np.squeeze(batch_val_loss))
-            pdb.set_trace()
 
             for head_, prediction_ in zip(heads, batch_pred):
                 if out_form == "cosine":
                     # Get cosine distance across the vocabulary
+                    prediction_ = np.expand_dims(prediction_, 0)
                     cosine_distance = np.squeeze(dist.cdist(prediction_, embs, metric="cosine"))
                     cosine_distance = np.nan_to_num(cosine_distance)
                 
@@ -459,7 +457,7 @@ def evaluate_model(sess, data_dir, input_node, target_node, prediction,
                     rank_cands = np.argsort(cosine_distance[2:]) + 2
                 else:
                     # Handle output from session as the ranking over the vocab
-                    pdb.set_trace()
+                    import pdb;pdb.set_trace()
                     #todo: This logic is probably wrong and shouldnt be submitted
                     # Get IDs of the vocabulary (excluding the first two vocab elements padding and _UNK
                     rank_cands = np.squeeze(prediction_)[2:].argsort() + 2
@@ -472,9 +470,8 @@ def evaluate_model(sess, data_dir, input_node, target_node, prediction,
                 print("HEADWORD -> %s" % rev_vocab[head_])
                 print("    RANK -> %d" % head_rank)
                 print("----------------------------")
-                
-            pdb.set_trace()
 
+            import pdb;pdb.set_trace()
     
     median_rank = np.asscalar(np.median(ranks))
     mean_loss = np.asscalar(np.mean(total_loss))
