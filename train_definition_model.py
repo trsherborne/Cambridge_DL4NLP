@@ -335,10 +335,6 @@ def build_model(max_seq_len, vocab_size, emb_size, learning_rate, encoder_type,
 def train_network(model, num_epochs, batch_size, data_dir, save_dir,
                   vocab_size, name="model", verbose=True):
     
-    if not tf.gfile.IsDirectory(save_dir):
-        tf.logging.info("Creating save_dir in %s..." % save_dir)
-        tf.gfile.MakeDirs(save_dir)
-        
     tf.logging.info("Model checkpoints to be saved in %s..." % save_dir)
     
     # Running count of the number of training instances.
@@ -391,9 +387,8 @@ def train_network(model, num_epochs, batch_size, data_dir, save_dir,
                     loss_ = (training_loss_ + training_loss) / logstep
                     
                     esum = tf.Summary()
-                    val = esum.value.add()
-                    val.simple_value = loss_
-                    val.tag = "train/avg_loss_logstep%d" % logstep
+                    esum.value.add(tag="train/avg_loss_logstep%d" % logstep,
+                                   simple_value=loss_)
                     writer.add_summary(esum, tf.train.global_step(sess, global_step))
                     training_losses.append(training_loss / logstep)
                     training_loss = 0
@@ -424,10 +419,12 @@ def train_network(model, num_epochs, batch_size, data_dir, save_dir,
         return save_dir, saver
 
 
-def evaluate_model(sess, data_dir, input_node, target_node, prediction,
-                   loss, rev_vocab, vocab, embs, out_form="cosine", verbose=True):
+def evaluate_model(sess, data_dir, input_node, target_node, prediction, loss,
+                   rev_vocab, vocab, embs, save_dir, global_step, out_form="cosine", verbose=True):
     
     assert out_form in ['cosine', 'softmax'], "Variable out_form=%s is not supported!" % out_form
+    
+    tf.logging.info("Running evaluation at step %d" % global_step)
     
     ranks = []
     total_loss = []
@@ -456,6 +453,7 @@ def evaluate_model(sess, data_dir, input_node, target_node, prediction,
                     # Rank vocabulary by cosine distance EXCLUDING _PAD and _UNK
                     rank_cands = np.argsort(cosine_distance[2:]) + 2
                 else:
+                    
                     # Handle output from session as the ranking over the vocab
                     import pdb;pdb.set_trace()
                     #todo: This logic is probably wrong and shouldnt be submitted
@@ -470,12 +468,22 @@ def evaluate_model(sess, data_dir, input_node, target_node, prediction,
                 print("HEADWORD -> %s" % rev_vocab[head_])
                 print("    RANK -> %d" % head_rank)
                 print("----------------------------")
-
-            import pdb;pdb.set_trace()
     
+    tf.logging.info("Completed evaluation at step %d" % global_step)
+
     median_rank = np.asscalar(np.median(ranks))
+    med_dev = np.asscalar(np.median(np.abs(ranks - median_rank)))
     mean_loss = np.asscalar(np.mean(total_loss))
     print('Median rank %.1f / Validation loss %.5f' % (median_rank, mean_loss))
+    
+    writer = tf.summary.FileWriter(logdir=save_dir)
+    eval_summaries = tf.Summary()
+    eval_summaries.value.add(tag="eval/loss", simple_value=mean_loss)
+    eval_summaries.value.add(tag="eval/rank", simple_value=median_rank)
+    eval_summaries.value.add(tag="eval/rank_mad", simple_value=med_dev)
+    eval_summaries.value.add(tag="eval/rank_dist", simple_value=ranks)
+    writer.add_summary(eval_summaries, global_step)
+    writer.flush()
     
     return ranks, median_rank, total_loss, mean_loss
 
@@ -483,7 +491,9 @@ def evaluate_model(sess, data_dir, input_node, target_node, prediction,
 def restore_model(sess, save_dir, vocab_file, out_form):
     # Get checkpoint in dir
     model_path = tf.train.latest_checkpoint(save_dir)
-    
+
+    global_step = int(os.path.basename(model_path).split('-')[1])
+
     # restore the model from the meta graph
     saver = tf.train.import_meta_graph(model_path + ".meta")
     saver.restore(sess, model_path)
@@ -505,7 +515,7 @@ def restore_model(sess, save_dir, vocab_file, out_form):
     # vocab is mapping from words to ids, rev_vocab is the reverse.
     vocab, rev_vocab = data_utils.initialize_vocabulary(vocab_file)
     
-    return input_node, target_node, predictions, loss, vocab, rev_vocab
+    return input_node, target_node, predictions, loss, vocab, rev_vocab, global_step
 
 
 def query_model(sess, input_node, predictions, vocab, rev_vocab,
@@ -577,6 +587,17 @@ def main(unused_argv):
     else:
         vocab_file = FLAGS.vocab_file
     
+    train_save_dir = FLAGS.save_dir + os.sep + "train"
+    eval_save_dir = FLAGS.save_dir + os.sep + "eval"
+    
+    if not tf.gfile.IsDirectory(train_save_dir):
+        tf.logging.info("Creating save_dir in %s..." % train_save_dir)
+        tf.gfile.MakeDirs(train_save_dir)
+        
+    if not tf.gfile.IsDirectory(eval_save_dir):
+        tf.logging.info("Creating save_dir in %s..." % eval_save_dir)
+        tf.gfile.MakeDirs(eval_save_dir)
+
     # Build and train a dictionary model.
     if not FLAGS.restore:
         emb_size = FLAGS.embedding_size
@@ -625,7 +646,7 @@ def main(unused_argv):
             FLAGS.num_epochs,
             FLAGS.batch_size,
             FLAGS.data_dir,
-            FLAGS.save_dir,
+            train_save_dir,
             FLAGS.vocab_size,
             name=FLAGS.model_name)
     
@@ -644,7 +665,7 @@ def main(unused_argv):
         with tf.device("/cpu:0"):
             with tf.Session() as sess:
                 (input_node, target_node, predictions, loss, vocab,
-                 rev_vocab) = restore_model(sess, FLAGS.save_dir, vocab_file,
+                 rev_vocab, global_step) = restore_model(sess, train_save_dir, vocab_file,
                                             out_form="cosine")
                 
                 if FLAGS.evaluate:
@@ -657,7 +678,9 @@ def main(unused_argv):
                                    rev_vocab=rev_vocab,
                                    vocab=vocab,
                                    embs=pre_embs,
-                                   out_form="cosine")
+                                   out_form="cosine",
+                                   save_dir=eval_save_dir,
+                                   global_step=global_step)
                 
                 # Load the final saved model and run querying routine.
                 query_model(sess, input_node, predictions,
