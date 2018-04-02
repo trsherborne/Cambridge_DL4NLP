@@ -25,7 +25,7 @@ import pickle
 import os
 import sys
 
-import tqdm
+from tqdm import tqdm
 import numpy as np
 import scipy.spatial.distance as dist
 import tensorflow as tf
@@ -426,21 +426,14 @@ def train_network(model, num_epochs, batch_size, data_dir, save_dir,
 
 def evaluate_model(sess, data_dir, input_node, target_node, prediction,
                    loss, rev_vocab, vocab, embs, out_form="cosine", verbose=True):
-    # read the development and test data using gen_epochs
-    # use sess.run and feed_dict to get a prediction
-    # (as numpy variable)
-    # use numpy to calculate the median rank over 200 dev instances
-    # also print out the rank for each of the 200 instances
-    # to see where the model does well, and badly!
     
-    num_epochs = 1
-    batch_size = 1
-    vocab_size = 100000
+    assert out_form in ['cosine', 'softmax'], "Variable out_form=%s is not supported!" % out_form
     
     ranks = []
     total_loss = []
     
-    for epoch in gen_epochs(data_path=data_dir, total_epochs=1, batch_size=batch_size, vocab_size=vocab_size, phase='dev'):
+    for epoch in gen_epochs(data_path=data_dir, total_epochs=1, batch_size=FLAGS.batch_size,
+                            vocab_size=100000, phase='dev'):
         for b_idx, (glosses, heads) in enumerate(epoch):
             
             if verbose:
@@ -456,34 +449,32 @@ def evaluate_model(sess, data_dir, input_node, target_node, prediction,
             total_loss.append(np.squeeze(batch_val_loss))
             pdb.set_trace()
 
-            if out_form == "cosine":
-                for head_, prediction_ in zip(heads, batch_pred):
+            for head_, prediction_ in zip(heads, batch_pred):
+                if out_form == "cosine":
                     # Get cosine distance across the vocabulary
                     cosine_distance = np.squeeze(dist.cdist(prediction_, embs, metric="cosine"))
                     cosine_distance = np.nan_to_num(cosine_distance)
                 
-                    # Rank vocabulary by cosine distance
-                    rank_cands = np.argsort(cosine_distance)
+                    # Rank vocabulary by cosine distance EXCLUDING _PAD and _UNK
+                    rank_cands = np.argsort(cosine_distance[2:]) + 2
+                else:
+                    # Handle output from session as the ranking over the vocab
+                    pdb.set_trace()
+                    #todo: This logic is probably wrong and shouldnt be submitted
+                    # Get IDs of the vocabulary (excluding the first two vocab elements padding and _UNK
+                    rank_cands = np.squeeze(prediction_)[2:].argsort() + 2
+
+                # Get the rank of the ground-truth head word by index
+                head_rank = np.asscalar(np.where(rank_cands == head_)[0].squeeze())
                 
-                    # Get the rank of the ground-truth head word by index
-                    head_rank = np.asscalar(np.squeeze(np.where(rank_cands == head_)))
-                    ranks.append(head_rank)
-        
-            elif out_form == "softmax":
-                # Handle output from session as the ranking over the vocab
-                pdb.set_trace()
-            
-                # Get IDs of the vocabulary (excluding the first two vocab elements padding and _UNK todo: Check this is correct
-                rank_cands = np.squeeze(batch_pred)[2:].argsort() + 2
-            
-                head_rank = np.asscalar(np.squeeze(np.where(rank_cands == head_)))
                 ranks.append(head_rank)
-        
+                print("----------------------------")
+                print("HEADWORD -> %s" % rev_vocab[head_])
+                print("    RANK -> %d" % head_rank)
+                print("----------------------------")
+                
             pdb.set_trace()
-            print("----------------------------")
-            print("HEADWORD -> %s" % rev_vocab[head_])
-            print("    RANK -> %d" % head_rank)
-            print("----------------------------")
+
     
     median_rank = np.asscalar(np.median(ranks))
     mean_loss = np.asscalar(np.mean(total_loss))
