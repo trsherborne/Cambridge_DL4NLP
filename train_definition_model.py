@@ -25,6 +25,7 @@ import pickle
 import os
 import sys
 
+import tqdm
 import numpy as np
 import scipy.spatial.distance as dist
 import tensorflow as tf
@@ -378,7 +379,7 @@ def train_network(model, num_epochs, batch_size, data_dir, save_dir,
             if verbose:
                 print("-> Epoch: ", idx + 1)
             
-            for step, (gloss, head) in enumerate(epoch):
+            for step, (gloss, head) in enumerate(tqdm(epoch)):
                 
                 num_training += len(gloss)
                 
@@ -439,50 +440,50 @@ def evaluate_model(sess, data_dir, input_node, target_node, prediction,
     ranks = []
     total_loss = []
     
-    import pdb; pdb.set_trace()
-    for idx, (glosses, heads) in enumerate(gen_epochs(data_dir, num_epochs, batch_size, vocab_size, phase='dev')):
+    for epoch in gen_epochs(data_path=data_dir, total_epochs=1, batch_size=batch_size, vocab_size=vocab_size, phase='dev'):
+        for b_idx, (glosses, heads) in enumerate(epoch):
+            
+            if verbose:
+                print('Evaluation step %d...' % (b_idx + 1))
         
-        if verbose:
-            print('Evaluation step %d...' % (idx + 1))
+            import pdb; pdb.set_trace()
         
-        import pdb; pdb.set_trace()
-        
-        # Get the predictions and the batch validation loss
-        batch_pred, batch_val_loss = sess.run(fetches=[prediction, loss],
-                                              feed_dict={input_node: glosses,
-                                                         target_node: heads})
-        
-        total_loss.append(np.squeeze(batch_val_loss))
-        pdb.set_trace()
-        
-        if out_form == "cosine":
-            for head_, prediction_ in zip(heads, batch_pred):
-                # Get cosine distance across the vocabulary
-                cosine_distance = np.squeeze(dist.cdist(prediction_, embs, metric="cosine"))
-                cosine_distance = np.nan_to_num(cosine_distance)
+            # Get the predictions and the batch validation loss
+            batch_pred, batch_val_loss = sess.run(fetches=[prediction, loss],
+                                                  feed_dict={input_node: glosses,
+                                                             target_node: heads})
+
+            total_loss.append(np.squeeze(batch_val_loss))
+            pdb.set_trace()
+
+            if out_form == "cosine":
+                for head_, prediction_ in zip(heads, batch_pred):
+                    # Get cosine distance across the vocabulary
+                    cosine_distance = np.squeeze(dist.cdist(prediction_, embs, metric="cosine"))
+                    cosine_distance = np.nan_to_num(cosine_distance)
                 
-                # Rank vocabulary by cosine distance
-                rank_cands = np.argsort(cosine_distance)
+                    # Rank vocabulary by cosine distance
+                    rank_cands = np.argsort(cosine_distance)
                 
-                # Get the rank of the ground-truth head word by index
+                    # Get the rank of the ground-truth head word by index
+                    head_rank = np.asscalar(np.squeeze(np.where(rank_cands == head_)))
+                    ranks.append(head_rank)
+        
+            elif out_form == "softmax":
+                # Handle output from session as the ranking over the vocab
+                pdb.set_trace()
+            
+                # Get IDs of the vocabulary (excluding the first two vocab elements padding and _UNK todo: Check this is correct
+                rank_cands = np.squeeze(batch_pred)[2:].argsort() + 2
+            
                 head_rank = np.asscalar(np.squeeze(np.where(rank_cands == head_)))
                 ranks.append(head_rank)
         
-        elif out_form == "softmax":
-            # Handle output from session as the ranking over the vocab
             pdb.set_trace()
-            
-            # Get IDs of the vocabulary (excluding the first two vocab elements padding and _UNK todo: Check this is correct
-            rank_cands = np.squeeze(batch_pred)[2:].argsort() + 2
-            
-            head_rank = np.asscalar(np.squeeze(np.where(rank_cands == head_)))
-            ranks.append(head_rank)
-        
-        pdb.set_trace()
-        print("----------------------------")
-        print("HEADWORD -> %s" % rev_vocab[head_])
-        print("    RANK -> %d" % head_rank)
-        print("----------------------------")
+            print("----------------------------")
+            print("HEADWORD -> %s" % rev_vocab[head_])
+            print("    RANK -> %d" % head_rank)
+            print("----------------------------")
     
     median_rank = np.asscalar(np.median(ranks))
     mean_loss = np.asscalar(np.mean(total_loss))
