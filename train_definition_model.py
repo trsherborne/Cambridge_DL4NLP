@@ -60,6 +60,7 @@ tf.app.flags.DEFINE_string("dev_file", "'dev.definitions.ids100000",
 
 tf.app.flags.DEFINE_string("save_dir", "/tmp/r228", "Directory for saving model."
                                                 "If using restore=True, directory to restore from.")
+tf.app.flags.DEFINE_string("exp_tag", "","Experiment tag")
 
 tf.app.flags.DEFINE_boolean("restore", False, "Restore a trained model"
                                               "instead of training one.")
@@ -492,8 +493,7 @@ def restore_model(sess, save_dir, vocab_file, out_form):
     # Get checkpoint in dir
     model_path = tf.train.latest_checkpoint(save_dir)
 
-    import pdb;pdb.set_trace()
-    global_step = int(os.path.basename(model_path).split('-')[1])
+    global_step = int(os.path.basename(model_path).split("_")[1].split(".")[0])
 
     # restore the model from the meta graph
     saver = tf.train.import_meta_graph(model_path + ".meta")
@@ -581,6 +581,7 @@ def main(unused_argv):
     If restore FLAG is true, loads an existing model and runs test
     routine. If restore FLAG is false, builds a model and trains it.
     """
+    assert FLAGS.exp_tag, "Must give experiment tag"
     
     if FLAGS.vocab_file is None:
         vocab_file = os.path.join(FLAGS.data_dir,
@@ -588,8 +589,8 @@ def main(unused_argv):
     else:
         vocab_file = FLAGS.vocab_file
     
-    train_save_dir = FLAGS.save_dir + os.sep + "train"
-    eval_save_dir = FLAGS.save_dir + os.sep + "eval"
+    train_save_dir = FLAGS.save_dir + os.sep + FLAGS.exp_tag + os.sep + "train"
+    eval_save_dir = FLAGS.save_dir + os.sep + FLAGS.exp_tag + os.sep + "eval"
     
     if not tf.gfile.IsDirectory(train_save_dir):
         tf.logging.info("Creating save_dir in %s..." % train_save_dir)
