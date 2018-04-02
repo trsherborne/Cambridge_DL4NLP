@@ -57,7 +57,7 @@ tf.app.flags.DEFINE_string("train_file", "train.definitions.ids100000",
 tf.app.flags.DEFINE_string("dev_file", "'dev.definitions.ids100000",
                            "File with dictionary definitions for dev testing.")
 
-tf.app.flags.DEFINE_string("save_dir", "/tmp/", "Directory for saving model."
+tf.app.flags.DEFINE_string("save_dir", "/tmp/r228", "Directory for saving model."
                                                 "If using restore=True, directory to restore from.")
 
 tf.app.flags.DEFINE_boolean("restore", False, "Restore a trained model"
@@ -317,25 +317,52 @@ def build_model(max_seq_len, vocab_size, emb_size, learning_rate, encoder_type,
                 labels=head_in, logits=pred_dist)
             
             output_form = "softmax"
+
         # Average loss across batch.
+        global_step =  tf.Variable(
+            initial_value=0,
+            name="global_step",
+            trainable=False,
+            collections=[tf.GraphKeys.GLOBAL_STEP, tf.GraphKeys.GLOBAL_VARIABLES])
+        
         total_loss = tf.reduce_mean(losses, name="total_loss")
-        train_step = tf.train.AdamOptimizer(learning_rate).minimize(total_loss)
-        return gloss_in, head_in, total_loss, train_step, output_form
+        train_step = tf.train.AdamOptimizer(learning_rate).minimize(loss=total_loss, global_step=global_step)
+        
+        return gloss_in, head_in, total_loss, train_step, output_form, learning_rate, global_step
 
 
 def train_network(model, num_epochs, batch_size, data_dir, save_dir,
                   vocab_size, name="model", verbose=True):
+    
+    if not tf.gfile.IsDirectory(save_dir):
+        tf.logging.info("Creating save_dir in %s..." % save_dir)
+        tf.gfile.MakeDirs(save_dir)
+        
+    tf.logging.info("Model checkpoints to be saved in %s..." % save_dir)
     
     # Running count of the number of training instances.
     num_training = 0
     
     # saver object for saving the model after each epoch.
     saver = tf.train.Saver()
+    writer = tf.summary.FileWriter(graph=tf.get_default_graph(),
+                                   logdir=save_dir)
+
+    # Get Tensor handles from model
+    gloss_in, head_in, total_loss, train_step, output_form, learning_rate, global_step = model
+
+    # Declare summaries to be saved
+    for var in tf.trainable_variables():
+        tf.summary.histogram("params/"+var.op.name, var)
+    tf.summary.scalar("train/total_loss", total_loss)
+    tf.summary.scalar("train/global_step", global_step)
+    tf.summary.scalar("train/learning_rate", learning_rate)
+    tf.summary.text("train/output_form", output_form)
+    summary_op = tf.summary.merge_all()
+    
+    logstep = 250
     
     with tf.Session(config=tf.ConfigProto(log_device_placement=True)) as sess:
-        # Get Tensor handles from model
-        gloss_in, head_in, total_loss, train_step, _ = model
-        
         # Initialize the model parameters.
         sess.run(tf.global_variables_initializer())
         
@@ -350,33 +377,50 @@ def train_network(model, num_epochs, batch_size, data_dir, save_dir,
             # Running total for training loss reset every 500 steps.
             training_loss = 0
             if verbose:
-                print("Epoch", idx + 1)
+                print("-> Epoch: ", idx + 1)
             
             for step, (gloss, head) in enumerate(epoch):
                 
                 num_training += len(gloss)
                 
-                training_loss_, _ = sess.run(fetches=[total_loss, train_step],
-                                             feed_dict={gloss_in: gloss,
-                                                        head_in: head
-                                                        }
-                                             )
-                # Accumulate training loss
-                training_loss += training_loss_
+                # Get the summaries every 250 steps
+                if step % logstep == 0 and step > 0:
+                    training_loss_, _, summaries_ = sess.run(fetches=[total_loss, train_step, summary_op],
+                                                            feed_dict={gloss_in: gloss, head_in: head})
                 
-                if step % 500 == 0 and step > 0:
-                    if verbose:
-                        loss_ = training_loss / 500
-                        print("Average loss step %s, for last 500 steps: %s"
-                              % (step, loss_))
-                    training_losses.append(training_loss / 500)
+                    loss_ = (training_loss_ + training_loss) / logstep
+                    
+                    esum = tf.Summary()
+                    val = esum.value.add()
+                    val.simple_value = loss_
+                    val.tag = "train/avg_loss_logstep%d" % logstep
+                    writer.add_summary(esum, tf.train.global_step(sess, global_step))
+                    training_losses.append(training_loss / logstep)
                     training_loss = 0
+                    writer.add_summary(summaries_, tf.train.global_step(sess, global_step))
+                    writer.flush()
+                    
+                    if verbose:
+                        print("Average loss step %s, for last %d steps: %s"
+                              % (step, logstep, loss_))
+
+                # Else don't run summaries (faster)
+                else:
+                    training_loss_, _ = sess.run(fetches=[total_loss, train_step],
+                                                 feed_dict={gloss_in: gloss,
+                                                            head_in: head
+                                                            }
+                                                 )
+                    # Accumulate training loss
+                    training_loss += training_loss_
             
             # Save current model after another epoch.
             save_path = os.path.join(save_dir, "%s_%s.ckpt" % (name, idx))
             save_path = saver.save(sess, save_path)
             print("Model saved in file: %s after epoch: %s" % (save_path, idx))
-        print("Total data points seen during training: %s" % num_training)
+        print("Total data points seen during training: %s or %d epochs of %d datapoints" % (num_training,
+                                                                                            num_epochs,
+                                                                                            num_training/num_epochs))
         return save_dir, saver
 
 
@@ -435,6 +479,7 @@ def evaluate_model(sess, data_dir, input_node, target_node, prediction,
             head_rank = np.asscalar(np.squeeze(np.where(rank_cands == head_)))
             ranks.append(head_rank)
         
+        pdb.set_trace()
         print("----------------------------")
         print("HEADWORD -> %s" % rev_vocab[head_])
         print("    RANK -> %d" % head_rank)
@@ -537,6 +582,7 @@ def main(unused_argv):
     If restore FLAG is true, loads an existing model and runs test
     routine. If restore FLAG is false, builds a model and trains it.
     """
+    
     if FLAGS.vocab_file is None:
         vocab_file = os.path.join(FLAGS.data_dir,
                                   "definitions_%s.vocab" % FLAGS.vocab_size)
