@@ -357,7 +357,6 @@ def train_network(model, num_epochs, batch_size, data_dir, save_dir,
     tf.summary.scalar("train/total_loss", total_loss)
     tf.summary.scalar("train/global_step", global_step)
     tf.summary.scalar("train/learning_rate", learning_rate)
-    tf.summary.text("train/output_form", output_form)
     summary_op = tf.summary.merge_all()
     
     logstep = 250
