@@ -147,8 +147,8 @@ def load_pretrained_embeddings(embeddings_file_path):
     first_key = next(iter_keys)
     embedding_length = len(pre_embs_dict[first_key])
     
-    tf.logging.info("Loaded %d embeddings loaded; each embedding is length %d" % (len(pre_embs_dict.values()),
-                                                                                  embedding_length))
+    tf.logging.info("Loaded %s embeddings; each embedding is length %d" % (np.shape(pre_embs_dict), embedding_length))
+    import pdb; pdb.set_trace()
     return pre_embs_dict, embedding_length
 
 
@@ -357,7 +357,7 @@ def train_network(model, num_epochs, batch_size, data_dir, save_dir,
     tf.summary.scalar("train/learning_rate", learning_rate)
     summary_op = tf.summary.merge_all()
     
-    logstep = 250
+    logstep = 500
     
     with tf.Session(config=tf.ConfigProto(log_device_placement=True)) as sess:
         # Initialize the model parameters.
@@ -468,14 +468,13 @@ def evaluate_model(sess, data_dir, input_node, target_node, prediction, loss,
                 print("----------------------------")
                 print("HEADWORD -> %s" % rev_vocab[head_])
                 print("    RANK -> %d" % head_rank)
-                print("----------------------------")
     
     tf.logging.info("Completed evaluation at step %d" % global_step)
 
     median_rank = np.asscalar(np.median(ranks))
-    med_dev = np.asscalar(np.median(np.abs(ranks - median_rank)))
+    med_dev = np.asscalar(np.median(np.abs(np.subtract(ranks, median_rank))))
     mean_loss = np.asscalar(np.mean(total_loss))
-    print('Median rank %.1f / Validation loss %.5f' % (median_rank, mean_loss))
+    print('Median rank %.1f ± %.4f / Validation loss %.5f' % (median_rank, med_dev, mean_loss))
     
     writer = tf.summary.FileWriter(logdir=save_dir)
     eval_summaries = tf.Summary()
@@ -493,7 +492,9 @@ def restore_model(sess, save_dir, vocab_file, out_form):
     # Get checkpoint in dir
     model_path = tf.train.latest_checkpoint(save_dir)
 
-    global_step = int(os.path.basename(model_path).split(b"_")[1].split(b".")[0])
+    global_step = int(os.path.basename(model_path).split("_")[1].split(".")[0])
+
+    tf.logging.info("Loading checkpoint from global step ", global_step)
 
     # restore the model from the meta graph
     saver = tf.train.import_meta_graph(model_path + ".meta")
@@ -575,7 +576,7 @@ def query_model(sess, input_node, predictions, vocab, rev_vocab,
         sentence = sys.stdin.readline()
 
 
-def main(unused_argv):
+def main(_):
     """Calls train and test routines for the dictionary model.
   
     If restore FLAG is true, loads an existing model and runs test
@@ -599,8 +600,6 @@ def main(unused_argv):
     if not tf.gfile.IsDirectory(eval_save_dir):
         tf.logging.info("Creating save_dir in %s..." % eval_save_dir)
         tf.gfile.MakeDirs(eval_save_dir)
-
-    import pdb; pdb.set_trace()
 
     # Build and train a dictionary model.
     if not FLAGS.restore:
