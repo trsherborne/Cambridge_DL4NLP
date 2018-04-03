@@ -490,8 +490,8 @@ def evaluate_model(sess, data_dir, input_node, target_node, prediction, loss,
     writer.add_summary(eval_summaries, global_step)
     writer.flush()
     
-    rank_str_file = save_dir + os.sep + 'ranks_step_%d.txt' % global_step
-    with open(ranks_str, 'w') as f:
+    ranks_str_file = save_dir + os.sep + 'ranks_step_%d.txt' % global_step
+    with open(ranks_str_file, 'w') as f:
         f.write(ranks_str)
     
     return ranks, median_rank, total_loss, mean_loss
