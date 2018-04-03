@@ -147,8 +147,8 @@ def load_pretrained_embeddings(embeddings_file_path):
     first_key = next(iter_keys)
     embedding_length = len(pre_embs_dict[first_key])
     
-    tf.logging.info("Loaded %s embeddings; each embedding is length %d" % (np.shape(pre_embs_dict), embedding_length))
-    import pdb; pdb.set_trace()
+    tf.logging.info("Loaded %d embeddings; each embedding is length %d" % (len(pre_embs_dict.keys()), embedding_length))
+
     return pre_embs_dict, embedding_length
 
 
