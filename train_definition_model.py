@@ -493,7 +493,7 @@ def restore_model(sess, save_dir, vocab_file, out_form):
     # Get checkpoint in dir
     model_path = tf.train.latest_checkpoint(save_dir)
 
-    global_step = int(os.path.basename(model_path).split("_")[1].split(".")[0])
+    global_step = int(os.path.basename(model_path).split(b"_")[1].split(b".")[0])
 
     # restore the model from the meta graph
     saver = tf.train.import_meta_graph(model_path + ".meta")
