@@ -374,7 +374,7 @@ def train_network(model, num_epochs, batch_size, data_dir, save_dir,
             # Running total for training loss reset every 500 steps.
             training_loss = 0
             if verbose:
-                print("-> Epoch: ", idx + 1)
+                print("-> Epoch: ", idx)
             
             for step, (gloss, head) in enumerate(tqdm(epoch)):
                 
@@ -397,7 +397,7 @@ def train_network(model, num_epochs, batch_size, data_dir, save_dir,
                     writer.flush()
                     
                     if verbose:
-                        print("Average loss step %s, for last %d steps: %s"
+                        print(" -> Average loss step %s, for last %d steps: %s"
                               % (step, logstep, loss_))
 
                 # Else don't run summaries (faster)
