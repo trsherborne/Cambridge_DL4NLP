@@ -428,6 +428,7 @@ def evaluate_model(sess, data_dir, input_node, target_node, prediction, loss,
     tf.logging.info("Running evaluation at step %d" % global_step)
     
     ranks = []
+    ranks_str = ''
     total_loss = []
     
     for epoch in gen_epochs(data_path=data_dir, total_epochs=1, batch_size=FLAGS.batch_size,
@@ -468,12 +469,16 @@ def evaluate_model(sess, data_dir, input_node, target_node, prediction, loss,
                 print("----------------------------")
                 print("HEADWORD -> %s" % rev_vocab[head_])
                 print("    RANK -> %d" % head_rank)
-    
+                ranks_str += '%d,%s,%d\n' % (head_, rev_vocab[head_],head_rank)
+
     tf.logging.info("Completed evaluation at step %d" % global_step)
 
-    median_rank = np.asscalar(np.median(ranks))
+    median_rank = np.median(np.asarray(ranks))
     med_dev = np.asscalar(np.median(np.abs(np.subtract(ranks, median_rank))))
     mean_loss = np.asscalar(np.mean(total_loss))
+    
+    ranks_str += '\nMedian_rank-%.1f,Med_dev-%.4f,Validation_loss-%.5f\n' % (median_rank, med_dev, mean_loss)
+    
     print('Median rank %.1f ± %.4f / Validation loss %.5f' % (median_rank, med_dev, mean_loss))
     
     writer = tf.summary.FileWriter(logdir=save_dir)
@@ -481,9 +486,13 @@ def evaluate_model(sess, data_dir, input_node, target_node, prediction, loss,
     eval_summaries.value.add(tag="eval/loss", simple_value=mean_loss)
     eval_summaries.value.add(tag="eval/rank", simple_value=median_rank)
     eval_summaries.value.add(tag="eval/rank_mad", simple_value=med_dev)
-    eval_summaries.value.add(tag="eval/rank_dist", simple_value=ranks)
+
     writer.add_summary(eval_summaries, global_step)
     writer.flush()
+    
+    rank_str_file = save_dir + os.sep + 'ranks_step_%d.txt' % global_step
+    with open(ranks_str, 'w') as f:
+        f.write(ranks_str)
     
     return ranks, median_rank, total_loss, mean_loss
 
@@ -494,7 +503,7 @@ def restore_model(sess, save_dir, vocab_file, out_form):
 
     global_step = int(os.path.basename(model_path).split("_")[1].split(".")[0])
 
-    tf.logging.info("Loading checkpoint from global step ", global_step)
+    tf.logging.info("Loading checkpoint from global step %d" % global_step)
 
     # restore the model from the meta graph
     saver = tf.train.import_meta_graph(model_path + ".meta")
@@ -686,9 +695,10 @@ def main(_):
                                    global_step=global_step)
                 
                 # Load the final saved model and run querying routine.
-                query_model(sess, input_node, predictions,
-                            vocab, rev_vocab, FLAGS.max_seq_len, embs=pre_embs,
-                            out_form="cosine")
+                
+                # query_model(sess, input_node, predictions,
+                #            vocab, rev_vocab, FLAGS.max_seq_len, embs=pre_embs,
+                #            out_form="cosine")
 
 
 if __name__ == "__main__":
