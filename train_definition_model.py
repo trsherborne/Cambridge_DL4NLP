@@ -58,7 +58,7 @@ tf.app.flags.DEFINE_string("train_file", "train.definitions.ids100000",
 tf.app.flags.DEFINE_string("dev_file", "'dev.definitions.ids100000",
                            "File with dictionary definitions for dev testing.")
 
-tf.app.flags.DEFINE_string("save_dir", "/tmp/r228", "Directory for saving model."
+tf.app.flags.DEFINE_string("save_dir", "./models/part1", "Directory for saving model."
                                                 "If using restore=True, directory to restore from.")
 tf.app.flags.DEFINE_string("exp_tag", "","Experiment tag")
 
@@ -599,6 +599,8 @@ def main(unused_argv):
     if not tf.gfile.IsDirectory(eval_save_dir):
         tf.logging.info("Creating save_dir in %s..." % eval_save_dir)
         tf.gfile.MakeDirs(eval_save_dir)
+
+    import pdb; pdb.set_trace()
 
     # Build and train a dictionary model.
     if not FLAGS.restore:
