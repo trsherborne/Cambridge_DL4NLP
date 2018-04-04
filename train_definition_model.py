@@ -384,7 +384,7 @@ def train_network(model, num_epochs, batch_size, data_dir, save_dir,
                 num_training += len(gloss)
                 
                 # Get the summaries every 250 steps
-                if step % logstep and step > 0:
+                if (step % logstep == 0) and (step > 0):
                     training_loss_, _, summaries_ = sess.run(fetches=[total_loss, train_step, summary_op],
                                                             feed_dict={gloss_in: gloss, head_in: head})
                 
