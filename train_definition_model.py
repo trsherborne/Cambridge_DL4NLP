@@ -46,7 +46,7 @@ tf.app.flags.DEFINE_integer("embedding_size", 500,
 tf.app.flags.DEFINE_integer("vocab_size", 100000, "Number of words the model"
                                                   "knows and stores representations for")
 
-tf.app.flags.DEFINE_integer("num_epochs", 1000, "Train for this number of"
+tf.app.flags.DEFINE_integer("num_epochs", 100, "Train for this number of"
                                                 "sweeps through the training set")
 
 tf.app.flags.DEFINE_string("data_dir", "../data/definitions/", "Directory for finding"
