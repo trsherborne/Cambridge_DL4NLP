@@ -359,7 +359,8 @@ def train_network(model, num_epochs, batch_size, data_dir, save_dir,
     tf.summary.scalar("train/learning_rate", learning_rate)
     summary_op = tf.summary.merge_all()
     
-    end_of_epoch_step = 367232 // batch_size - 1
+    #end_of_epoch_step = 367232 // batch_size
+    logstep = 1000
     
     with tf.Session(config=tf.ConfigProto(log_device_placement=True)) as sess:
         # Initialize the model parameters.
@@ -383,23 +384,23 @@ def train_network(model, num_epochs, batch_size, data_dir, save_dir,
                 num_training += len(gloss)
                 
                 # Get the summaries every 250 steps
-                if step == end_of_epoch_step:
+                if step % logstep and step > 0:
                     training_loss_, _, summaries_ = sess.run(fetches=[total_loss, train_step, summary_op],
                                                             feed_dict={gloss_in: gloss, head_in: head})
                 
-                    loss_ = (training_loss_ + training_loss) / end_of_epoch_step
+                    loss_ = (training_loss_ + training_loss) / logstep
                     
                     esum = tf.Summary()
                     esum.value.add(tag="train/avg_loss", simple_value=loss_)
                     writer.add_summary(esum, tf.train.global_step(sess, global_step))
-                    training_losses.append(training_loss / end_of_epoch_step)
+                    training_losses.append(training_loss / logstep)
                     training_loss = 0
                     writer.add_summary(summaries_, tf.train.global_step(sess, global_step))
                     writer.flush()
                     
                     if verbose:
                         print(" -> Average loss step %s, for last %d steps: %s"
-                              % (step, end_of_epoch_step, loss_))
+                              % (step, logstep, loss_))
 
                 # Else don't run summaries (faster)
                 else:
