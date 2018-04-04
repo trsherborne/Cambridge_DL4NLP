@@ -359,7 +359,7 @@ def train_network(model, num_epochs, batch_size, data_dir, save_dir,
     tf.summary.scalar("train/learning_rate", learning_rate)
     summary_op = tf.summary.merge_all()
     
-    end_of_epoch_step = 367232 // batch_size
+    end_of_epoch_step = 367232 // batch_size - 1
     
     with tf.Session(config=tf.ConfigProto(log_device_placement=True)) as sess:
         # Initialize the model parameters.
