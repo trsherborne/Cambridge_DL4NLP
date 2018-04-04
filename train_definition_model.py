@@ -357,7 +357,7 @@ def train_network(model, num_epochs, batch_size, data_dir, save_dir,
     tf.summary.scalar("train/learning_rate", learning_rate)
     summary_op = tf.summary.merge_all()
     
-    logstep = 500
+    logstep = 1000
     
     with tf.Session(config=tf.ConfigProto(log_device_placement=True)) as sess:
         # Initialize the model parameters.
