@@ -390,8 +390,7 @@ def train_network(model, num_epochs, batch_size, data_dir, save_dir,
                     loss_ = (training_loss_ + training_loss) / end_of_epoch_step
                     
                     esum = tf.Summary()
-                    esum.value.add(tag="train/avg_loss" % end_of_epoch_step,
-                                   simple_value=loss_)
+                    esum.value.add(tag="train/avg_loss", simple_value=loss_)
                     writer.add_summary(esum, tf.train.global_step(sess, global_step))
                     training_losses.append(training_loss / end_of_epoch_step)
                     training_loss = 0
