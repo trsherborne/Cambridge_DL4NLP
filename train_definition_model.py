@@ -430,15 +430,12 @@ def evaluate_model(sess, data_dir, input_node, target_node, prediction, loss,
     tf.logging.info("Running evaluation at step %d" % global_step)
     
     ranks = []
-    ranks_alternate = []
     ranks_str = ''
     total_loss = []
     
     for epoch in gen_epochs(data_path=data_dir, total_epochs=1, batch_size=FLAGS.batch_size,
                             vocab_size=100000, phase='dev'):
         for b_idx, (glosses, heads) in enumerate(epoch):
-            
-            import pdb; pdb.set_trace()
             
             if verbose:
                 print('Evaluation step %d with out_form %s...' % (b_idx + 1, out_form))
@@ -454,25 +451,19 @@ def evaluate_model(sess, data_dir, input_node, target_node, prediction, loss,
                 if out_form == "cosine":
                     # Get cosine distance across the vocabulary
                     prediction_ = np.expand_dims(prediction_, 0)
-                    cosine_distance = np.squeeze(dist.cdist(prediction_, embs, metric="cosine"))
+                    cosine_distance = 1 - np.squeeze(dist.cdist(prediction_, embs, metric="cosine"))
                     cosine_distance = np.nan_to_num(cosine_distance)
                 
-                    # Rank vocabulary by cosine distance EXCLUDING _PAD and _UNK
-                    rank_cands = np.argsort(cosine_distance[2:]) + 2
+                    # Rank vocabulary by cosine distance
+                    rank_cands = np.argsort(cosine_distance)[::-1]
 
-                    sims = 1 - np.squeeze(dist.cdist(prediction_, embs, metric="cosine"))
-                    # replace nans with 0s.
-                    sims = np.nan_to_num(sims)
-                    rank_cands_alt = sims.argsort()[::-1]
                 else:
                     # Rank by the softmax prediction
                     rank_cands = np.squeeze(prediction_)[2:].argsort()[::-1] + 2
 
                 # Get the rank of the ground-truth head word by index
                 head_rank = np.asscalar(np.where(rank_cands == head_)[0].squeeze())
-                head_rank_alt = np.asscalar(np.where(rank_cands_alt == head_)[0].squeeze())
                 ranks.append(head_rank)
-                ranks_alternate.append(head_rank_alt)
                 
                 print("----------------------------")
                 print("HEADWORD -> %s" % rev_vocab[head_])
@@ -497,10 +488,6 @@ def evaluate_model(sess, data_dir, input_node, target_node, prediction, loss,
     eval_summaries.value.add(tag="eval/median_rank", simple_value=median_rank)
     eval_summaries.value.add(tag="eval/rank_mad", simple_value=med_dev)
 
-    # Alternate ranking test
-    alt_med_rank = np.median(np.asarray(ranks_alternate))
-    eval_summaries.value.add(tag="eval/median_rank_alt", simple_value=alt_med_rank)
-    
     writer.add_summary(eval_summaries, global_step)
     writer.flush()
     
@@ -686,7 +673,7 @@ def main(_):
             embs_dict, pre_emb_dim = load_pretrained_embeddings(FLAGS.embeddings_path)
             vocab, _ = data_utils.initialize_vocabulary(vocab_file)
             pre_embs = get_embedding_matrix(embs_dict, vocab, pre_emb_dim)
-                
+            
         # Always run on CPU for no resource contention
         with tf.device("/cpu:0"):
             with tf.Session() as sess:
