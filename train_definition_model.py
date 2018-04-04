@@ -84,6 +84,8 @@ tf.app.flags.DEFINE_string("encoder_type", "recurrent", "BOW or recurrent.")
 
 tf.app.flags.DEFINE_string("model_name", "recurrent", "BOW or recurrent.")
 
+tf.app.flags.DEFINE_string("out_form", "cosine", "Type of output loss")
+
 FLAGS = tf.app.flags.FLAGS
 
 tf.logging.set_verbosity(tf.logging.INFO)
@@ -357,7 +359,7 @@ def train_network(model, num_epochs, batch_size, data_dir, save_dir,
     tf.summary.scalar("train/learning_rate", learning_rate)
     summary_op = tf.summary.merge_all()
     
-    logstep = 1000
+    end_of_epoch_step = 367232 // batch_size
     
     with tf.Session(config=tf.ConfigProto(log_device_placement=True)) as sess:
         # Initialize the model parameters.
@@ -381,24 +383,24 @@ def train_network(model, num_epochs, batch_size, data_dir, save_dir,
                 num_training += len(gloss)
                 
                 # Get the summaries every 250 steps
-                if step % logstep == 0 and step > 0:
+                if step == end_of_epoch_step:
                     training_loss_, _, summaries_ = sess.run(fetches=[total_loss, train_step, summary_op],
                                                             feed_dict={gloss_in: gloss, head_in: head})
                 
-                    loss_ = (training_loss_ + training_loss) / logstep
+                    loss_ = (training_loss_ + training_loss) / end_of_epoch_step
                     
                     esum = tf.Summary()
-                    esum.value.add(tag="train/avg_loss_logstep%d" % logstep,
+                    esum.value.add(tag="train/avg_loss" % end_of_epoch_step,
                                    simple_value=loss_)
                     writer.add_summary(esum, tf.train.global_step(sess, global_step))
-                    training_losses.append(training_loss / logstep)
+                    training_losses.append(training_loss / end_of_epoch_step)
                     training_loss = 0
                     writer.add_summary(summaries_, tf.train.global_step(sess, global_step))
                     writer.flush()
                     
                     if verbose:
                         print(" -> Average loss step %s, for last %d steps: %s"
-                              % (step, logstep, loss_))
+                              % (step, end_of_epoch_step, loss_))
 
                 # Else don't run summaries (faster)
                 else:
@@ -428,6 +430,7 @@ def evaluate_model(sess, data_dir, input_node, target_node, prediction, loss,
     tf.logging.info("Running evaluation at step %d" % global_step)
     
     ranks = []
+    ranks_alternate = []
     ranks_str = ''
     total_loss = []
     
@@ -435,8 +438,10 @@ def evaluate_model(sess, data_dir, input_node, target_node, prediction, loss,
                             vocab_size=100000, phase='dev'):
         for b_idx, (glosses, heads) in enumerate(epoch):
             
+            import pdb; pdb.set_trace()
+            
             if verbose:
-                print('Evaluation step %d...' % (b_idx + 1))
+                print('Evaluation step %d with out_form %s...' % (b_idx + 1, out_form))
                 
             # Get the predictions and the batch validation loss
             batch_pred, batch_val_loss = sess.run(fetches=[prediction, loss],
@@ -454,18 +459,21 @@ def evaluate_model(sess, data_dir, input_node, target_node, prediction, loss,
                 
                     # Rank vocabulary by cosine distance EXCLUDING _PAD and _UNK
                     rank_cands = np.argsort(cosine_distance[2:]) + 2
+
+                    sims = 1 - np.squeeze(dist.cdist(prediction_, embs, metric="cosine"))
+                    # replace nans with 0s.
+                    sims = np.nan_to_num(sims)
+                    rank_cands_alt = sims.argsort()[::-1]
                 else:
-                    
-                    # Handle output from session as the ranking over the vocab
-                    import pdb;pdb.set_trace()
-                    #todo: This logic is probably wrong and shouldnt be submitted
-                    # Get IDs of the vocabulary (excluding the first two vocab elements padding and _UNK
-                    rank_cands = np.squeeze(prediction_)[2:].argsort() + 2
+                    # Rank by the softmax prediction
+                    rank_cands = np.squeeze(prediction_)[2:].argsort()[::-1] + 2
 
                 # Get the rank of the ground-truth head word by index
                 head_rank = np.asscalar(np.where(rank_cands == head_)[0].squeeze())
-                
+                head_rank_alt = np.asscalar(np.where(rank_cands_alt == head_)[0].squeeze())
                 ranks.append(head_rank)
+                ranks_alternate.append(head_rank_alt)
+                
                 print("----------------------------")
                 print("HEADWORD -> %s" % rev_vocab[head_])
                 print("    RANK -> %d" % head_rank)
@@ -474,6 +482,7 @@ def evaluate_model(sess, data_dir, input_node, target_node, prediction, loss,
     tf.logging.info("Completed evaluation at step %d" % global_step)
 
     median_rank = np.median(np.asarray(ranks))
+    mean_rank = np.mean(np.asarray(ranks))
     med_dev = np.asscalar(np.median(np.abs(np.subtract(ranks, median_rank))))
     mean_loss = np.asscalar(np.mean(total_loss))
     
@@ -484,9 +493,14 @@ def evaluate_model(sess, data_dir, input_node, target_node, prediction, loss,
     writer = tf.summary.FileWriter(logdir=save_dir)
     eval_summaries = tf.Summary()
     eval_summaries.value.add(tag="eval/loss", simple_value=mean_loss)
-    eval_summaries.value.add(tag="eval/rank", simple_value=median_rank)
+    eval_summaries.value.add(tag="eval/mean_rank",simple_value=mean_rank)
+    eval_summaries.value.add(tag="eval/median_rank", simple_value=median_rank)
     eval_summaries.value.add(tag="eval/rank_mad", simple_value=med_dev)
 
+    # Alternate ranking test
+    alt_med_rank = np.median(np.asarray(ranks_alternate))
+    eval_summaries.value.add(tag="eval/median_rank_alt", simple_value=alt_med_rank)
+    
     writer.add_summary(eval_summaries, global_step)
     writer.flush()
     
@@ -672,13 +686,13 @@ def main(_):
             embs_dict, pre_emb_dim = load_pretrained_embeddings(FLAGS.embeddings_path)
             vocab, _ = data_utils.initialize_vocabulary(vocab_file)
             pre_embs = get_embedding_matrix(embs_dict, vocab, pre_emb_dim)
-        
+                
         # Always run on CPU for no resource contention
         with tf.device("/cpu:0"):
             with tf.Session() as sess:
                 (input_node, target_node, predictions, loss, vocab,
                  rev_vocab, global_step) = restore_model(sess, train_save_dir, vocab_file,
-                                            out_form="cosine")
+                                            out_form=FLAGS.out_form)
                 
                 if FLAGS.evaluate:
                     evaluate_model(sess=sess,
@@ -690,7 +704,7 @@ def main(_):
                                    rev_vocab=rev_vocab,
                                    vocab=vocab,
                                    embs=pre_embs,
-                                   out_form="cosine",
+                                   out_form=FLAGS.out_form,
                                    save_dir=eval_save_dir,
                                    global_step=global_step)
                 
