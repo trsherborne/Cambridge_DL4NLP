@@ -24,6 +24,8 @@ from __future__ import print_function
 import pickle
 import os
 import sys
+from time import time
+from datetime import datetime
 
 from tqdm import tqdm
 import numpy as np
@@ -46,7 +48,7 @@ tf.app.flags.DEFINE_integer("embedding_size", 500,
 tf.app.flags.DEFINE_integer("vocab_size", 100000, "Number of words the model"
                                                   "knows and stores representations for")
 
-tf.app.flags.DEFINE_integer("num_epochs", 100, "Train for this number of"
+tf.app.flags.DEFINE_integer("num_epochs", 200, "Train for this number of"
                                                 "sweeps through the training set")
 
 tf.app.flags.DEFINE_string("data_dir", "../data/definitions/", "Directory for finding"
@@ -339,6 +341,8 @@ def train_network(model, num_epochs, batch_size, data_dir, save_dir,
                   vocab_size, name="model", verbose=True):
     
     tf.logging.info("Model checkpoints to be saved in %s..." % save_dir)
+    tf.logging.info("Beginning training at %s" % (datetime.now()))
+    start_time = time()
     
     # Running count of the number of training instances.
     num_training = 0
@@ -416,6 +420,8 @@ def train_network(model, num_epochs, batch_size, data_dir, save_dir,
             save_path = os.path.join(save_dir, "%s_%s.ckpt" % (name, idx))
             save_path = saver.save(sess, save_path)
             print("Model saved in file: %s after epoch: %s" % (save_path, idx))
+            
+        print("Elapsed training time %s" % (time()-start_time))
         print("Total data points seen during training: %s or %d epochs of %d datapoints" % (num_training,
                                                                                             num_epochs,
                                                                                             num_training/num_epochs))
@@ -428,7 +434,9 @@ def evaluate_model(sess, data_dir, input_node, target_node, prediction, loss,
     assert out_form in ['cosine', 'softmax'], "Variable out_form=%s is not supported!" % out_form
     
     tf.logging.info("Running evaluation at step %d" % global_step)
+    tf.logging.info("Beginning eval at %s" % (datetime.now()))
     
+    start_time = time()
     ranks = []
     ranks_str = ''
     total_loss = []
@@ -470,6 +478,7 @@ def evaluate_model(sess, data_dir, input_node, target_node, prediction, loss,
                 print("    RANK -> %d" % head_rank)
                 ranks_str += '%d,%s,%d\n' % (head_, rev_vocab[head_],head_rank)
 
+    tf.logging.info("Elapsed training time %s" % (time()-start_time))
     tf.logging.info("Completed evaluation at step %d" % global_step)
 
     median_rank = np.median(np.asarray(ranks))
