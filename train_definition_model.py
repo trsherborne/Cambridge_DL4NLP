@@ -86,7 +86,7 @@ tf.app.flags.DEFINE_string("encoder_type", "recurrent", "BOW or recurrent.")
 
 tf.app.flags.DEFINE_string("model_name", "recurrent", "BOW or recurrent.")
 
-tf.app.flags.DEFINE_string("out_form", "cosine", "Type of output loss")
+tf.app.flags.DEFINE_string("out_form", "cosine", "Type of output loss FOR EVAL ONLY")
 
 FLAGS = tf.app.flags.FLAGS
 
@@ -424,7 +424,7 @@ def train_network(model, num_epochs, batch_size, data_dir, save_dir,
             save_path = saver.save(sess, save_path)
             print("Model saved in file: %s after epoch: %s" % (save_path, idx))
             
-        print("Elapsed training time %s" % (time()-start_time))
+        print("Elapsed training time %.2f hours" % ((time()-start_time)/(60*60)) )
         print("Total data points seen during training: %s or %d epochs of %d datapoints" % (num_training,
                                                                                             num_epochs,
                                                                                             num_training/num_epochs))
