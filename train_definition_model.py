@@ -366,7 +366,10 @@ def train_network(model, num_epochs, batch_size, data_dir, save_dir,
     #end_of_epoch_step = 367232 // batch_size
     logstep = 1000
     
-    with tf.Session(config=tf.ConfigProto(log_device_placement=True)) as sess:
+    for var in tf.trainable_variables():
+        print("VAR -> %s" % var.op.name)
+    
+    with tf.Session(config=tf.ConfigProto(allow_soft_placement=True)) as sess:
         # Initialize the model parameters.
         sess.run(tf.global_variables_initializer())
         
