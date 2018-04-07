@@ -242,8 +242,8 @@ def build_model(max_seq_len, vocab_size, emb_size, learning_rate, encoder_type,
                     name="inp_emb",
                     shape=[vocab_size, emb_size],
                     initializer=tf.constant_initializer(pre_embs),
-                    trainable=False)
-                tf.logging.info("Getting non-trainable embedding matrix for input...")
+                    trainable=True)
+                tf.logging.info("Getting trainable embedding matrix for input...")
             
             else:
                 # embedding_matrix is learned.
@@ -288,9 +288,9 @@ def build_model(max_seq_len, vocab_size, emb_size, learning_rate, encoder_type,
                     name="out_emb",
                     shape=[vocab_size, out_size],
                     initializer=tf.constant_initializer(pre_embs),
-                    trainable=False)
+                    trainable=True)
                 
-                tf.logging.info("Getting non-trainable embedding matrix for output...")
+                tf.logging.info("Getting trainable embedding matrix for output...")
                 
             # Put core_out through a final non-linear layer.
             core_out = tf.contrib.layers.fully_connected(
