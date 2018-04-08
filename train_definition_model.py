@@ -288,7 +288,7 @@ def build_model(max_seq_len, vocab_size, emb_size, learning_rate, encoder_type,
                     name="out_emb",
                     shape=[vocab_size, out_size],
                     initializer=tf.constant_initializer(pre_embs),
-                    trainable=True)
+                    trainable=False)
                 
                 tf.logging.info("Getting trainable embedding matrix for output...")
                 
@@ -433,6 +433,23 @@ def train_network(model, num_epochs, batch_size, data_dir, save_dir,
 
 def evaluate_model(sess, data_dir, input_node, target_node, prediction, loss,
                    rev_vocab, vocab, embs, save_dir, global_step, out_form="cosine", verbose=True):
+    """
+    todo: docstring
+    :param sess:
+    :param data_dir:
+    :param input_node:
+    :param target_node:
+    :param prediction:
+    :param loss:
+    :param rev_vocab:
+    :param vocab:
+    :param embs:
+    :param save_dir:
+    :param global_step:
+    :param out_form:
+    :param verbose:
+    :return:
+    """
     
     assert out_form in ['cosine', 'softmax'], "Variable out_form=%s is not supported!" % out_form
     
