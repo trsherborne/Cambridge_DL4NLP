@@ -310,7 +310,7 @@ def build_model(max_seq_len, vocab_size, emb_size, learning_rate, encoder_type,
                 tf.nn.l2_normalize(core_out, 1),
                 dim=1)
         else:
-            tf.logging.info("Heads are not pretrained, creating softmax output...")
+            tf.logging.info("Do not use pretrained head word embeddings, creating softmax output...")
             
             # Create a softmax loss when no pre-trained heads.
             out_emb_matrix = tf.get_variable(
@@ -460,43 +460,45 @@ def evaluate_model(sess, data_dir, input_node, target_node, prediction, loss,
     ranks = []
     ranks_str = ''
     total_loss = []
+
+
+    epoch = next(gen_epochs(data_path=data_dir, total_epochs=1, batch_size=FLAGS.batch_size,
+                            vocab_size=FLAGS.vocab_size, phase="dev"))
+
+    for b_idx, (glosses, heads) in enumerate(epoch):
     
-    for epoch in gen_epochs(data_path=data_dir, total_epochs=1, batch_size=FLAGS.batch_size,
-                            vocab_size=100000, phase='dev'):
-        for b_idx, (glosses, heads) in enumerate(epoch):
+        if verbose:
+            print('Evaluation step %d with out_form %s...' % (b_idx + 1, out_form))
+    
+        # Get the predictions and the batch validation loss
+        batch_pred, batch_val_loss = sess.run(fetches=[prediction, loss],
+                                              feed_dict={input_node: glosses,
+                                                         target_node: heads})
+    
+        total_loss.append(np.squeeze(batch_val_loss))
+    
+        for head_, prediction_ in zip(heads, batch_pred):
+            if out_form == "cosine":
+                # Get cosine distance across the vocabulary
+                prediction_ = np.expand_dims(prediction_, 0)
+                cosine_distance = 1 - np.squeeze(dist.cdist(prediction_, embs, metric="cosine"))
+                cosine_distance = np.nan_to_num(cosine_distance)
             
-            if verbose:
-                print('Evaluation step %d with out_form %s...' % (b_idx + 1, out_form))
-                
-            # Get the predictions and the batch validation loss
-            batch_pred, batch_val_loss = sess.run(fetches=[prediction, loss],
-                                                  feed_dict={input_node: glosses,
-                                                             target_node: heads})
-            
-            total_loss.append(np.squeeze(batch_val_loss))
-
-            for head_, prediction_ in zip(heads, batch_pred):
-                if out_form == "cosine":
-                    # Get cosine distance across the vocabulary
-                    prediction_ = np.expand_dims(prediction_, 0)
-                    cosine_distance = 1 - np.squeeze(dist.cdist(prediction_, embs, metric="cosine"))
-                    cosine_distance = np.nan_to_num(cosine_distance)
-                
-                    # Rank vocabulary by cosine distance
-                    rank_cands = np.argsort(cosine_distance)[::-1]
-
-                else:
-                    # Rank by the softmax prediction
-                    rank_cands = np.squeeze(prediction_)[2:].argsort()[::-1] + 2
-
-                # Get the rank of the ground-truth head word by index
-                head_rank = np.asscalar(np.where(rank_cands == head_)[0].squeeze())
-                ranks.append(head_rank)
-                
-                print("----------------------------")
-                print("HEADWORD -> %s" % rev_vocab[head_])
-                print("    RANK -> %d" % head_rank)
-                ranks_str += '%d,%s,%d\n' % (head_, rev_vocab[head_],head_rank)
+                # Rank vocabulary by cosine distance
+                rank_cands = np.argsort(cosine_distance)[::-1]
+        
+            else:
+                # Rank by the softmax prediction
+                rank_cands = np.squeeze(prediction_)[2:].argsort()[::-1] + 2
+        
+            # Get the rank of the ground-truth head word by index
+            head_rank = np.asscalar(np.where(rank_cands == head_)[0].squeeze())
+            ranks.append(head_rank)
+        
+            print("----------------------------")
+            print("HEADWORD -> %s" % rev_vocab[head_])
+            print("    RANK -> %d" % head_rank)
+            ranks_str += '%d,%s,%d\n' % (head_, rev_vocab[head_], head_rank)
 
     tf.logging.info("Elapsed training time %s" % (time()-start_time))
     tf.logging.info("Completed evaluation at step %d" % global_step)
