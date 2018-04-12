@@ -39,7 +39,7 @@ tf.app.flags.DEFINE_integer("max_seq_len", 20, "Maximum length (in words) of a"
 
 tf.app.flags.DEFINE_integer("batch_size", 128, "batch size")
 
-tf.app.flags.DEFINE_float("learning_rate", 0.0001,
+tf.app.flags.DEFINE_float("learning_rate", 0.001,
                           "Learning rate applied in TF optimiser")
 
 tf.app.flags.DEFINE_integer("embedding_size", 500,
@@ -332,7 +332,7 @@ def build_model(max_seq_len, vocab_size, emb_size, learning_rate, encoder_type,
             collections=[tf.GraphKeys.GLOBAL_STEP, tf.GraphKeys.GLOBAL_VARIABLES])
         
         total_loss = tf.reduce_mean(losses, name="total_loss")
-        train_step = tf.train.AdadeltaOptimizer(learning_rate).minimize(loss=total_loss, global_step=global_step)
+        train_step = tf.train.RMSPropOptimizer(learning_rate).minimize(loss=total_loss, global_step=global_step)
         
         return gloss_in, head_in, total_loss, train_step, output_form, learning_rate, global_step
 
