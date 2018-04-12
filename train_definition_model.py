@@ -41,6 +41,10 @@ tf.app.flags.DEFINE_integer("batch_size", 128, "batch size")
 
 tf.app.flags.DEFINE_float("learning_rate", 0.001,
                           "Learning rate applied in TF optimiser")
+tf.app.flags.DEFINE_integer("lr_decay_epochs", 10,
+                          "How many epochs before decay_factor")
+tf.app.flags.DEFINE_float("lr_decay_rate", 0.5,
+                          "LR decay rate factor")
 
 tf.app.flags.DEFINE_integer("embedding_size", 500,
                             "Number of units in word representation.")
@@ -330,10 +334,41 @@ def build_model(max_seq_len, vocab_size, emb_size, learning_rate, encoder_type,
             name="global_step",
             trainable=False,
             collections=[tf.GraphKeys.GLOBAL_STEP, tf.GraphKeys.GLOBAL_VARIABLES])
+
+        steps_per_epoch = int(367347/FLAGS.batch_size)
         
+        # Learning rate decay
+        def _learning_rate_decay_fn(learning_rate, global_step):
+            return tf.train.exponential_decay(
+                learning_rate,
+                global_step,
+                decay_steps=FLAGS.lr_decay_epochs * steps_per_epoch,
+                decay_rate=FLAGS.lr_decay_rate,
+                staircase=True)
+
+        learning_rate_decay_fn = _learning_rate_decay_fn
+
         total_loss = tf.reduce_mean(losses, name="total_loss")
-        train_step = tf.train.RMSPropOptimizer(learning_rate).minimize(loss=total_loss, global_step=global_step)
-        
+        train_step = tf.contrib.layers.optimize_loss(
+            loss=total_loss,
+            global_step=global_step,
+            learning_rate=learning_rate,
+            optimizer="RMSProp",
+            clip_gradients=None,
+            learning_rate_decay_fn=learning_rate_decay_fn
+        )
+
+        # Optimizer names
+        # OPTIMIZER_CLS_NAMES = {
+        #     "Adagrad": train.AdagradOptimizer,
+        #     "Adam": train.AdamOptimizer,
+        #     "Ftrl": train.FtrlOptimizer,
+        #     "Momentum": lambda learning_rate: train.MomentumOptimizer(learning_rate, momentum=0.9),
+        # # pylint: disable=line-too-long
+        #     "RMSProp": train.RMSPropOptimizer,
+        #     "SGD": train.GradientDescentOptimizer,
+        # }
+
         return gloss_in, head_in, total_loss, train_step, output_form, learning_rate, global_step
 
 
