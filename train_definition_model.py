@@ -332,7 +332,7 @@ def build_model(max_seq_len, vocab_size, emb_size, learning_rate, encoder_type,
             collections=[tf.GraphKeys.GLOBAL_STEP, tf.GraphKeys.GLOBAL_VARIABLES])
         
         total_loss = tf.reduce_mean(losses, name="total_loss")
-        train_step = tf.train.AdamOptimizer(learning_rate).minimize(loss=total_loss, global_step=global_step)
+        train_step = tf.train.AdadeltaOptimizer(learning_rate).minimize(loss=total_loss, global_step=global_step)
         
         return gloss_in, head_in, total_loss, train_step, output_form, learning_rate, global_step
 
