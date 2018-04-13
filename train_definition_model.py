@@ -357,7 +357,7 @@ def build_model(max_seq_len, vocab_size, emb_size, learning_rate, encoder_type,
             learning_rate=learning_rate,
             optimizer=FLAGS.optimizer,
             clip_gradients=5,
-            learning_rate_decay_fn=None
+            learning_rate_decay_fn=learning_rate_decay_fn
         )
 
         # Optimizer names
