@@ -353,7 +353,7 @@ def build_model(max_seq_len, vocab_size, emb_size, learning_rate, encoder_type,
             loss=total_loss,
             global_step=global_step,
             learning_rate=learning_rate,
-            optimizer="RMSProp",
+            optimizer="SGD",
             clip_gradients=None,
             learning_rate_decay_fn=learning_rate_decay_fn
         )
@@ -363,8 +363,7 @@ def build_model(max_seq_len, vocab_size, emb_size, learning_rate, encoder_type,
         #     "Adagrad": train.AdagradOptimizer,
         #     "Adam": train.AdamOptimizer,
         #     "Ftrl": train.FtrlOptimizer,
-        #     "Momentum": lambda learning_rate: train.MomentumOptimizer(learning_rate, momentum=0.9),
-        # # pylint: disable=line-too-long
+        #     "Momentum": lambda learning_rate: train.MomentumOptimizer(learning_rate, momentum=0.9),# pylint: disable=line-too-long
         #     "RMSProp": train.RMSPropOptimizer,
         #     "SGD": train.GradientDescentOptimizer,
         # }
