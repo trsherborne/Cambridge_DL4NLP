@@ -271,7 +271,6 @@ def build_model(max_seq_len, vocab_size, emb_size, learning_rate, encoder_type,
         # RNN encoder for the definitions.
         if encoder_type == "recurrent":
             cell = tf.nn.rnn_cell.LSTMCell(emb_size)
-            cell = tf.contrib.rnn.AttentionCellWrapper(cell, attn_length=10)
             # state is the final state of the RNN.
             _, state = tf.nn.dynamic_rnn(cell, embs, dtype=tf.float32)
             # state is a pair: (hidden_state, output)
