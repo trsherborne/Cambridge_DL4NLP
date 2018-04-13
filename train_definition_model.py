@@ -92,6 +92,8 @@ tf.app.flags.DEFINE_string("model_name", "recurrent", "BOW or recurrent.")
 
 tf.app.flags.DEFINE_string("out_form", "cosine", "Type of output loss FOR EVAL ONLY")
 
+tf.app.flags.DEFINE_string("optimizer","Adam", "Type of optimizer for tf.train.optimize_loss")
+
 FLAGS = tf.app.flags.FLAGS
 
 tf.logging.set_verbosity(tf.logging.INFO)
@@ -353,7 +355,7 @@ def build_model(max_seq_len, vocab_size, emb_size, learning_rate, encoder_type,
             loss=total_loss,
             global_step=global_step,
             learning_rate=learning_rate,
-            optimizer="SGD",
+            optimizer=FLAGS.optimizer,
             clip_gradients=None,
             learning_rate_decay_fn=learning_rate_decay_fn
         )
