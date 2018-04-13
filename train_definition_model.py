@@ -302,7 +302,7 @@ def build_model(max_seq_len, vocab_size, emb_size, learning_rate, encoder_type,
             core_out = tf.contrib.layers.fully_connected(
                 core_out,
                 out_size,
-                activation_fn=tf.tanh)
+                activation_fn=tf.relu)
             
             tf.logging.info("Encoder is passed through a fc layer to size %d..." % out_size)
             
