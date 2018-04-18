@@ -26,6 +26,7 @@ import os
 import sys
 from time import time
 from datetime import datetime
+from collections import namedtuple
 
 from tqdm import tqdm
 import numpy as np
@@ -41,10 +42,15 @@ tf.app.flags.DEFINE_integer("batch_size", 128, "batch size")
 
 tf.app.flags.DEFINE_float("learning_rate", 0.001,
                           "Learning rate applied in TF optimiser")
+
 tf.app.flags.DEFINE_integer("lr_decay_epochs", 10,
                           "How many epochs before decay_factor")
-tf.app.flags.DEFINE_float("lr_decay_rate", 0.5,
-                          "LR decay rate factor")
+
+tf.app.flags.DEFINE_float("lr_decay_rate", None,
+                          "LR decay rate factor. Typical value might be 0.5 or 0.9")
+
+tf.app.flags.DEFINE_float("grad_clip_val", 5.0,
+                          "Gradient clipping limit")
 
 tf.app.flags.DEFINE_integer("embedding_size", 500,
                             "Number of units in word representation.")
@@ -92,7 +98,8 @@ tf.app.flags.DEFINE_string("model_name", "recurrent", "BOW or recurrent.")
 
 tf.app.flags.DEFINE_string("out_form", "cosine", "Type of output loss FOR EVAL ONLY")
 
-tf.app.flags.DEFINE_string("optimizer","Adam", "Type of optimizer for tf.train.optimize_loss")
+tf.app.flags.DEFINE_string("optimizer","Adam", "Type of optimizer for tf.train.optimize_loss "
+                                               "['Adagrad','Adam','Ftrl','Momentum','RMSProp','SGD']")
 
 FLAGS = tf.app.flags.FLAGS
 
@@ -348,27 +355,17 @@ def build_model(max_seq_len, vocab_size, emb_size, learning_rate, encoder_type,
                 decay_rate=FLAGS.lr_decay_rate,
                 staircase=True)
 
-        learning_rate_decay_fn = _learning_rate_decay_fn
-
+        learning_rate_decay_fn = _learning_rate_decay_fn if FLAGS.lr_decay_rate else None
+        
         total_loss = tf.reduce_mean(losses, name="total_loss")
         train_step = tf.contrib.layers.optimize_loss(
             loss=total_loss,
             global_step=global_step,
             learning_rate=learning_rate,
             optimizer=FLAGS.optimizer,
-            clip_gradients=5.0,
+            clip_gradients=FLAGS.grad_clip_val,
             learning_rate_decay_fn=learning_rate_decay_fn
         )
-
-        # Optimizer names
-        # OPTIMIZER_CLS_NAMES = {
-        #     "Adagrad": train.AdagradOptimizer,
-        #     "Adam": train.AdamOptimizer,
-        #     "Ftrl": train.FtrlOptimizer,
-        #     "Momentum": lambda learning_rate: train.MomentumOptimizer(learning_rate, momentum=0.9),# pylint: disable=line-too-long
-        #     "RMSProp": train.RMSPropOptimizer,
-        #     "SGD": train.GradientDescentOptimizer,
-        # }
 
         return gloss_in, head_in, total_loss, train_step, output_form, learning_rate, global_step
 
@@ -470,100 +467,120 @@ def train_network(model, num_epochs, batch_size, data_dir, save_dir,
 def evaluate_model(sess, data_dir, input_node, target_node, prediction, loss,
                    rev_vocab, vocab, embs, save_dir, global_step, out_form="cosine", verbose=True):
     """
-    todo: docstring
-    :param sess:
-    :param data_dir:
-    :param input_node:
-    :param target_node:
-    :param prediction:
-    :param loss:
-    :param rev_vocab:
-    :param vocab:
-    :param embs:
-    :param save_dir:
-    :param global_step:
-    :param out_form:
-    :param verbose:
-    :return:
+    Thomas Sherborne trs46
+    R228 Deep Learning for Natural Language Processing Assignment 1
+    April 2018
+    
+    Evaluate reverse dictionary model in terms of median rank on dev set and validation loss
+    
+    input
+    ------
+    :param sess:        TF session with loaded model checkpoint or current training checkpoint
+    :param data_dir:    directory to load development data from
+    :param input_node:  tf.placeholder to feed in dev set glosses for head word encoding and loss calculation
+    :param target_node: tf.placeholder to feed in dev set head words for validation loss computation in sess.graph
+    :param prediction:  tf operation to fetch the prediction for head word embedding using input_node
+    :param loss:        tf operation for validation loss
+    :param rev_vocab:   reverse dict to look up word strings from vocab index keys
+    :param vocab:       vocab dict to look up vocab indices from word string keys
+    :param embs:        pretrained W2V embeddings for all head words to rank across
+    :param save_dir:    directory to log summaries to
+    :param global_step: nth epoch to log summaries for
+    :param out_form:    string to condition the type of assessment as 'cosine' for cdist or 'softmax' for ranking
+    :param verbose:     boolean True for output logging or False for silent
+    ------
+    :return:None:
     """
     
-    assert out_form in ['cosine', 'softmax'], "Variable out_form=%s is not supported!" % out_form
-    
-    tf.logging.info("Running evaluation at step %d" % global_step)
-    tf.logging.info("Beginning eval at %s" % (datetime.now()))
-    
+    if out_form not in ['cosine', 'softmax']:
+        raise NotImplementedError("output forms of only 'cosine' and 'softmax' supported.")
+
+    # Keep start time
     start_time = time()
-    ranks = []
-    ranks_str = ''
-    total_loss = []
 
+    RankedWord = namedtuple("RankedWord", ["word", "idx", "rank"])
 
-    epoch = next(gen_epochs(data_path=data_dir, total_epochs=1, batch_size=FLAGS.batch_size,
+    # Accumulators for rankings and validation loss
+    ranks_ = []
+    loss_ = []
+    
+    if verbose:
+        tf.logging.info("Running evaluation for epoch %d\nBeginning eval at %s" % (global_step, datetime.now()))
+    
+    # Batch size is set by FLAGS unless greater than validation set size
+    dev_batch_size = FLAGS.batch_size if FLAGS.batch_size < 200 else 1
+    
+    # Get epoch
+    epoch = next(gen_epochs(data_path=data_dir, total_epochs=1, batch_size=dev_batch_size,
                             vocab_size=FLAGS.vocab_size, phase="dev"))
 
+    # Get ranks over the batch
     for b_idx, (glosses, heads) in enumerate(epoch):
-    
+        
         if verbose:
             print('Evaluation step %d with out_form %s...' % (b_idx + 1, out_form))
     
-        # Get the predictions and the batch validation loss
+        # Get the predictions and the batch validation loss from the session graph
         batch_pred, batch_val_loss = sess.run(fetches=[prediction, loss],
                                               feed_dict={input_node: glosses,
                                                          target_node: heads})
-    
-        total_loss.append(np.squeeze(batch_val_loss))
-    
+        # Accumulate loss over dev set words
+        loss_ = np.concatenate((loss_, batch_val_loss.squeeze()))
+        
+        # Over each word in dev set
         for head_, prediction_ in zip(heads, batch_pred):
+            # If learning using cosine loss and embeddings for head words
             if out_form == "cosine":
                 # Get cosine distance across the vocabulary
                 prediction_ = np.expand_dims(prediction_, 0)
                 cosine_distance = 1 - np.squeeze(dist.cdist(prediction_, embs, metric="cosine"))
                 cosine_distance = np.nan_to_num(cosine_distance)
-            
                 # Rank vocabulary by cosine distance
                 rank_cands = np.argsort(cosine_distance)[::-1]
-        
+            # Else learning with softmax as labels not embeddings for heads
             else:
                 # Rank by the softmax prediction
                 rank_cands = np.squeeze(prediction_)[2:].argsort()[::-1] + 2
-        
             # Get the rank of the ground-truth head word by index
             head_rank = np.asscalar(np.where(rank_cands == head_)[0].squeeze())
-            ranks.append(head_rank)
-        
-            print("----------------------------")
-            print("HEADWORD -> %s" % rev_vocab[head_])
-            print("    RANK -> %d" % head_rank)
-            ranks_str += '%d,%s,%d\n' % (head_, rev_vocab[head_], head_rank)
+            # Append to list of rankings
+            ranks_.append(RankedWord(word=rev_vocab[head_], idx=head_, rank=head_rank))
+            
+            if verbose:
+                tf.logging.info("----------------------------\n"
+                                "HEAD -> %s\nRANK -> %d\n" % (ranks_[-1].word, ranks_[-1].rank))
 
-    tf.logging.info("Elapsed training time %s" % (time()-start_time))
-    tf.logging.info("Completed evaluation at step %d" % global_step)
+    if verbose:
+        tf.logging.info("Elapsed evaluation time %s\nCompleted evaluation at epoch %d", (time()-start_time, global_step))
 
-    median_rank = np.median(np.asarray(ranks))
-    mean_rank = np.mean(np.asarray(ranks))
-    med_dev = np.asscalar(np.median(np.abs(np.subtract(ranks, median_rank))))
-    mean_loss = np.asscalar(np.mean(total_loss))
+    # Get metrics over the validation set
+    rank_avg_median = np.median([word.rank for word in ranks_])
+    rank_avg_mad = np.median(np.abs([word.rank - rank_avg_median for word in ranks_]))
+    loss_avg_mean = np.mean(loss_)
+    loss_avg_std = np.std(np.mean(loss_))
     
-    ranks_str += '\nMedian_rank-%.1f,Med_dev-%.4f,Validation_loss-%.5f\n' % (median_rank, med_dev, mean_loss)
-    
-    print('Median rank %.1f ± %.4f / Validation loss %.5f' % (median_rank, med_dev, mean_loss))
-    
+    if verbose:
+        tf.logging.info('Median rank %.1f ± %.4f / Validation loss %.5f ± %.4f' % (rank_avg_median, rank_avg_mad,
+                                                                                    loss_avg_mean, loss_avg_std))
+    # Tensorboard logging
     writer = tf.summary.FileWriter(logdir=save_dir)
     eval_summaries = tf.Summary()
-    eval_summaries.value.add(tag="eval/loss", simple_value=mean_loss)
-    eval_summaries.value.add(tag="eval/mean_rank",simple_value=mean_rank)
-    eval_summaries.value.add(tag="eval/median_rank", simple_value=median_rank)
-    eval_summaries.value.add(tag="eval/rank_mad", simple_value=med_dev)
-
+    eval_summaries.value.add(tag="eval/loss", simple_value=loss_avg_mean)
+    eval_summaries.value.add(tag="eval/loss_stddev", simple_value=loss_avg_std)
+    eval_summaries.value.add(tag="eval/median_rank", simple_value=rank_avg_median)
+    eval_summaries.value.add(tag="eval/rank_mad", simple_value=rank_avg_mad)
     writer.add_summary(eval_summaries, global_step)
     writer.flush()
-    
+
+    # File logging
     ranks_str_file = save_dir + os.sep + 'ranks_step_%d.txt' % global_step
     with open(ranks_str_file, 'w') as f:
-        f.write(ranks_str)
+        f.writelines(
+            ['%d,%s,%d\n' % (w.idx, w.word, w.rank) for w in ranks_]
+        )
+        f.write("rank,%.1f,mad,%.1f,loss,%.5f,stddev,%.4f" %
+                (rank_avg_median, rank_avg_mad, loss_avg_mean, loss_avg_std))
     
-    return ranks, median_rank, total_loss, mean_loss
-
 
 def restore_model(sess, save_dir, vocab_file, out_form):
     # Get checkpoint in dir
