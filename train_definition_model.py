@@ -88,6 +88,9 @@ tf.app.flags.DEFINE_boolean("pretrained_target", True,
 tf.app.flags.DEFINE_boolean("pretrained_input", False,
                             "Use pre-trained embeddings for gloss words.")
 
+tf.app.flags.DEFINE_boolean("train_gloss_vocabulary", False,
+                            "Given a pretrained_input, allow gradients to flow into embedding matrix?")
+
 tf.app.flags.DEFINE_string("embeddings_path",
                            "../embeddings/GoogleWord2Vec.clean.normed.pkl",
                            "Path to pre-trained (.pkl) word embeddings.")
@@ -256,12 +259,13 @@ def build_model(max_seq_len, vocab_size, emb_size, learning_rate, encoder_type,
             if pretrained_input:
                 assert pre_embs is not None, "Must include pre-trained embedding matrix"
                 
+                tf.logging.info("Using pre-trained embeddings, learning embeddings? %s " % FLAGS.train_gloss_vocabulary)
                 # embedding_matrix is pre-trained embeddings.
                 embedding_matrix = tf.get_variable(
                     name="inp_emb",
                     shape=[vocab_size, emb_size],
                     initializer=tf.constant_initializer(pre_embs),
-                    trainable=True)
+                    trainable=FLAGS.train_gloss_vocabulary)
                 tf.logging.info("Getting trainable embedding matrix for input...")
             
             else:
