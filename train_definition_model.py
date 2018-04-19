@@ -92,6 +92,12 @@ tf.app.flags.DEFINE_string("embeddings_path",
                            "../embeddings/GoogleWord2Vec.clean.normed.pkl",
                            "Path to pre-trained (.pkl) word embeddings.")
 
+tf.app.flags.DEFINE_string("glove_path",
+                           "../embeddings/glove.840B.300d.4.pkl",
+                           "Path to GloVe embeddings .pkl")
+
+tf.app.flags.DEFINE_boolean("use_glove", False, "Conditional to select which embeddings to load [W2V or Glove]")
+
 tf.app.flags.DEFINE_string("encoder_type", "recurrent", "BOW or recurrent.")
 
 tf.app.flags.DEFINE_string("model_name", "recurrent", "BOW or recurrent.")
@@ -578,7 +584,7 @@ def evaluate_model(sess, data_dir, input_node, target_node, prediction, loss,
         f.writelines(
             ['%d,%s,%d\n' % (w.idx, w.word, w.rank) for w in ranks_]
         )
-        f.write("rank,%.1f,mad,%.1f,loss,%.5f,stddev,%.4f" %
+        f.write("rank,%.1f,mad,%.1f,loss,%.5f,stddev,%.4f\n" %
                 (rank_avg_median, rank_avg_mad, loss_avg_mean, loss_avg_std))
     
 
@@ -703,7 +709,9 @@ def main(_):
         if FLAGS.pretrained_input or FLAGS.pretrained_target:
 
             # embs_dict is a dictionary from words to vectors.
-            embs_dict, pre_emb_dim = load_pretrained_embeddings(FLAGS.embeddings_path)
+            emb_path = FLAGS.glove_path if FLAGS.use_glove else FLAGS.embeddings_path
+            
+            embs_dict, pre_emb_dim = load_pretrained_embeddings(emb_path)
             if FLAGS.pretrained_input:
                 emb_size = pre_emb_dim
         else:
@@ -754,7 +762,8 @@ def main(_):
         
         # Get pretrained objects
         if FLAGS.pretrained_input or FLAGS.pretrained_target:
-            embs_dict, pre_emb_dim = load_pretrained_embeddings(FLAGS.embeddings_path)
+            emb_path = FLAGS.glove_path if FLAGS.use_glove else FLAGS.embeddings_path
+            embs_dict, pre_emb_dim = load_pretrained_embeddings(emb_path)
             vocab, _ = data_utils.initialize_vocabulary(vocab_file)
             pre_embs = get_embedding_matrix(embs_dict, vocab, pre_emb_dim)
             
