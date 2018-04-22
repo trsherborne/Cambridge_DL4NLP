@@ -399,11 +399,8 @@ def train_network(model, num_epochs, batch_size, data_dir, save_dir, eval_save_d
     gloss_in, head_in, total_loss, train_step, out_form, learning_rate, global_step = model
 
     # Declare summaries to be saved
-    for var in tf.trainable_variables():
-        tf.summary.histogram("params/"+var.op.name, var)
-    tf.summary.scalar("train/total_loss", total_loss)
-    tf.summary.scalar("train/global_step", global_step)
-    tf.summary.scalar("train/learning_rate", learning_rate)
+    #for var in tf.trainable_variables():
+    #    tf.summary.histogram("params/"+var.op.name, var)
     summary_op = tf.summary.merge_all()
     
     #end_of_epoch_step = 367232 // batch_size
@@ -427,9 +424,6 @@ def train_network(model, num_epochs, batch_size, data_dir, save_dir, eval_save_d
         # Initialize the model parameters.
         sess.run(tf.global_variables_initializer())
         
-        # Record all training losses for potential reporting.
-        training_losses = []
-        
         # epoch is a generator of batches which passes over the data once.
         for idx, epoch in enumerate(
             gen_epochs(
@@ -444,39 +438,17 @@ def train_network(model, num_epochs, batch_size, data_dir, save_dir, eval_save_d
                 
                 num_training += len(gloss)
                 
-                # Get the summaries every 250 steps
-                if (step % logstep == 0) and (step > 0):
-                    training_loss_, _, summaries_ = sess.run(fetches=[total_loss, train_step, summary_op],
-                                                            feed_dict={gloss_in: gloss, head_in: head})
-                
-                    loss_ = (training_loss_ + training_loss) / logstep
-                    
-                    esum = tf.Summary()
-                    esum.value.add(tag="train/avg_loss", simple_value=loss_)
-                    writer.add_summary(esum, tf.train.global_step(sess, global_step))
-                    training_losses.append(training_loss / logstep)
-                    training_loss = 0
-                    writer.add_summary(summaries_, tf.train.global_step(sess, global_step))
+                if step % logstep==0 and step > 0:
+                    training_loss_, _, summaries = sess.run(fetches=[total_loss, train_step, summary_op],
+                                                            feed_dict={gloss_in: gloss,
+                                                                       head_in: head})
+                    writer.add_summary(summaries)
                     writer.flush()
-                    
-                    if verbose:
-                        print(" -> Average loss step %s, for last %d steps: %.5f"
-                              % (step, logstep, loss_))
-
-                # Else don't run summaries (faster)
                 else:
                     training_loss_, _ = sess.run(fetches=[total_loss, train_step],
                                                  feed_dict={gloss_in: gloss,
                                                             head_in: head
-                                                            }
-                                                 )
-                    # Accumulate training loss
-                    training_loss += training_loss_
-            
-            # Save current model after another epoch.
-            #save_path = os.path.join(save_dir, "%s_%s.ckpt" % (name, idx))
-            #save_path = saver.save(sess, save_path)
-            #print("Model saved in file: %s after epoch: %s" % (save_path, idx))
+                                                            })
             
             # Run evaluation after each epoch
             evaluate_model(sess=sess,
