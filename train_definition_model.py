@@ -474,9 +474,9 @@ def train_network(model, num_epochs, batch_size, data_dir, save_dir, eval_save_d
                     training_loss += training_loss_
             
             # Save current model after another epoch.
-            save_path = os.path.join(save_dir, "%s_%s.ckpt" % (name, idx))
-            save_path = saver.save(sess, save_path)
-            print("Model saved in file: %s after epoch: %s" % (save_path, idx))
+            #save_path = os.path.join(save_dir, "%s_%s.ckpt" % (name, idx))
+            #save_path = saver.save(sess, save_path)
+            #print("Model saved in file: %s after epoch: %s" % (save_path, idx))
             
             # Run evaluation after each epoch
             evaluate_model(sess=sess,
@@ -554,14 +554,14 @@ def evaluate_model(sess, data_dir, input_node, target_node, prediction, loss,
     for b_idx, (glosses, heads) in enumerate(epoch):
         
         if verbose:
-            print('Evaluation step %d with out_form %s...' % (b_idx + 1, out_form))
+            print('Evaluation step %d...' % (b_idx + 1))
     
         # Get the predictions and the batch validation loss from the session graph
         batch_pred, batch_val_loss = sess.run(fetches=[prediction, loss],
                                               feed_dict={input_node: glosses,
                                                          target_node: heads})
         # Accumulate loss over dev set words
-        loss_ = np.concatenate((loss_, batch_val_loss.squeeze()))
+        loss_ = np.concatenate((loss_, [batch_val_loss]))
         
         # Over each word in dev set
         for head_, prediction_ in zip(heads, batch_pred):
@@ -588,7 +588,8 @@ def evaluate_model(sess, data_dir, input_node, target_node, prediction, loss,
                                 "HEAD -> %s\nRANK -> %d\n" % (ranks_[-1].word, ranks_[-1].rank))
 
     if verbose:
-        tf.logging.info("Elapsed evaluation time %s\nCompleted evaluation at epoch %d", (time()-start_time, global_step))
+        tf.logging.info("Elapsed evaluation time %s\nCompleted evaluation at epoch %d" %
+                        (time()-start_time, global_step))
 
     # Get metrics over the validation set
     rank_avg_median = np.median([word.rank for word in ranks_])
