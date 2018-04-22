@@ -180,7 +180,7 @@ def load_pretrained_embeddings(embeddings_file_path):
 
 def get_embedding_matrix(embedding_dict, vocab, emb_dim):
     tf.logging.info("Creating %d-dim embedding matrix for %d words" % (emb_dim, len(vocab)))
-    emb_matrix = np.zeros([len(vocab), emb_dim])
+    emb_matrix = np.random.normal(size=[len(vocab), emb_dim])
     rejected_words=0
     for word, ii in vocab.items():
         if word in embedding_dict:
@@ -567,7 +567,7 @@ def evaluate_model(sess, data_dir, input_node, target_node, prediction, loss,
     rank_avg_median = np.median([word.rank for word in ranks_])
     rank_avg_mad = np.median(np.abs([word.rank - rank_avg_median for word in ranks_]))
     loss_avg_mean = np.mean(loss_)
-    loss_avg_std = np.std(np.mean(loss_))
+    loss_avg_std = np.std(loss_)
     
     if verbose:
         tf.logging.info('Median rank %.1f ± %.4f / Validation loss %.5f ± %.4f' % (rank_avg_median, rank_avg_mad,
