@@ -438,11 +438,11 @@ def train_network(model, num_epochs, batch_size, data_dir, save_dir, eval_save_d
                 
                 num_training += len(gloss)
                 
-                if step % logstep==0 and step > 0:
+                if (step % logstep == 0) and step > 0:
                     training_loss_, _, summaries = sess.run(fetches=[total_loss, train_step, summary_op],
                                                             feed_dict={gloss_in: gloss,
                                                                        head_in: head})
-                    writer.add_summary(summaries)
+                    writer.add_summary(summaries, global_step=step)
                     writer.flush()
                 else:
                     training_loss_, _ = sess.run(fetches=[total_loss, train_step],
