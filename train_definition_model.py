@@ -442,7 +442,7 @@ def train_network(model, num_epochs, batch_size, data_dir, save_dir, eval_save_d
                     training_loss_, _, summaries = sess.run(fetches=[total_loss, train_step, summary_op],
                                                             feed_dict={gloss_in: gloss,
                                                                        head_in: head})
-                    writer.add_summary(summaries, global_step=step)
+                    writer.add_summary(summaries, global_step=tf.train.global_step(sess, global_step))
                     writer.flush()
                 else:
                     training_loss_, _ = sess.run(fetches=[total_loss, train_step],
