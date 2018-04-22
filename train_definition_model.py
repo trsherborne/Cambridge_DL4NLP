@@ -380,8 +380,8 @@ def build_model(max_seq_len, vocab_size, emb_size, learning_rate, encoder_type,
         return gloss_in, head_in, total_loss, train_step, output_form, learning_rate, global_step
 
 
-def train_network(model, num_epochs, batch_size, data_dir, save_dir,
-                  vocab_size, name="model", verbose=True):
+def train_network(model, num_epochs, batch_size, data_dir, save_dir, eval_save_dir,
+                  vocab, rev_vocab, vocab_size, name="model", eval_embs=None, verbose=True):
     
     tf.logging.info("Model checkpoints to be saved in %s..." % save_dir)
     tf.logging.info("Beginning training at %s" % (datetime.now()))
@@ -396,7 +396,7 @@ def train_network(model, num_epochs, batch_size, data_dir, save_dir,
                                    logdir=save_dir)
 
     # Get Tensor handles from model
-    gloss_in, head_in, total_loss, train_step, output_form, learning_rate, global_step = model
+    gloss_in, head_in, total_loss, train_step, out_form, learning_rate, global_step = model
 
     # Declare summaries to be saved
     for var in tf.trainable_variables():
@@ -413,6 +413,17 @@ def train_network(model, num_epochs, batch_size, data_dir, save_dir,
         print("VAR -> %s" % var.op.name)
     
     with tf.Session(config=tf.ConfigProto(allow_soft_placement=True)) as sess:
+        
+        tf.logging.info("Getting default graph...")
+        graph = tf.get_default_graph()
+        if out_form == "softmax":
+            predictions = graph.get_tensor_by_name("predictions:0")
+        else:
+            predictions = graph.get_tensor_by_name("fully_connected/Tanh:0")
+            
+        tf.logging.info("Extracted tensor handle for output %s" % out_form)
+        tf.logging.info("Tensor found -> %s" % predictions)
+    
         # Initialize the model parameters.
         sess.run(tf.global_variables_initializer())
         
@@ -467,7 +478,22 @@ def train_network(model, num_epochs, batch_size, data_dir, save_dir,
             save_path = saver.save(sess, save_path)
             print("Model saved in file: %s after epoch: %s" % (save_path, idx))
             
-        print("Elapsed training time %.2f hours" % ((time()-start_time)/(60*60)) )
+            # Run evaluation after each epoch
+            evaluate_model(sess=sess,
+                           data_dir=data_dir,
+                           input_node=gloss_in,
+                           target_node=head_in,
+                           prediction=predictions,
+                           loss=total_loss,
+                           rev_vocab=rev_vocab,
+                           vocab=vocab,
+                           embs=eval_embs,
+                           save_dir=eval_save_dir,
+                           global_step=idx,
+                           out_form=out_form,
+                           verbose=True)
+            
+        print("Elapsed training time %.2f hours" % ((time()-start_time)/(60*60)))
         print("Total data points seen during training: %s or %d epochs of %d datapoints" % (num_training,
                                                                                             num_epochs,
                                                                                             num_training/num_epochs))
@@ -493,13 +519,13 @@ def evaluate_model(sess, data_dir, input_node, target_node, prediction, loss,
     :param loss:        tf operation for validation loss
     :param rev_vocab:   reverse dict to look up word strings from vocab index keys
     :param vocab:       vocab dict to look up vocab indices from word string keys
-    :param embs:        pretrained W2V embeddings for all head words to rank across
+    :param embs:        pretrained W2V/GloVe embeddings for all head words to rank across
     :param save_dir:    directory to log summaries to
     :param global_step: nth epoch to log summaries for
-    :param out_form:    string to condition the type of assessment as 'cosine' for cdist or 'softmax' for ranking
+    :param out_form:    string to condition the type of assessment as 'cosine' for cdist or 'softmax' for simple ranking
     :param verbose:     boolean True for output logging or False for silent
     ------
-    :return:None:
+    :return:None
     """
     
     if out_form not in ['cosine', 'softmax']:
@@ -547,6 +573,7 @@ def evaluate_model(sess, data_dir, input_node, target_node, prediction, loss,
                 cosine_distance = np.nan_to_num(cosine_distance)
                 # Rank vocabulary by cosine distance
                 rank_cands = np.argsort(cosine_distance)[::-1]
+                
             # Else learning with softmax as labels not embeddings for heads
             else:
                 # Rank by the softmax prediction
@@ -730,7 +757,7 @@ def main(_):
             max_seq_len=FLAGS.max_seq_len)
 
         # vocab is a dictionary from strings to integers.
-        vocab, _ = data_utils.initialize_vocabulary(vocab_file)
+        vocab, rev_vocab = data_utils.initialize_vocabulary(vocab_file)
         pre_embs = None
 
         if FLAGS.pretrained_input or FLAGS.pretrained_target:
@@ -756,7 +783,11 @@ def main(_):
             FLAGS.batch_size,
             FLAGS.data_dir,
             train_save_dir,
-            FLAGS.vocab_size,
+            eval_save_dir,
+            vocab=vocab,
+            rev_vocab=rev_vocab,
+            vocab_size=FLAGS.vocab_size,
+            eval_embs=pre_embs,
             name=FLAGS.model_name)
     
     # Load an existing model.
