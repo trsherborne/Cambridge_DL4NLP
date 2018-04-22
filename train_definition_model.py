@@ -419,7 +419,7 @@ def train_network(model, num_epochs, batch_size, data_dir, save_dir, eval_save_d
         if out_form == "softmax":
             predictions = graph.get_tensor_by_name("predictions:0")
         else:
-            predictions = graph.get_tensor_by_name("fully_connected/Tanh:0")
+            predictions = graph.get_tensor_by_name("fully_connected/Relu:0")
             
         tf.logging.info("Extracted tensor handle for output %s" % out_form)
         tf.logging.info("Tensor found -> %s" % predictions)
@@ -544,8 +544,8 @@ def evaluate_model(sess, data_dir, input_node, target_node, prediction, loss,
         tf.logging.info("Running evaluation for epoch %d\nBeginning eval at %s" % (global_step, datetime.now()))
     
     # Batch size is set by FLAGS unless greater than validation set size
-    dev_batch_size = FLAGS.batch_size if FLAGS.batch_size < 200 else 1
-    
+    #dev_batch_size = FLAGS.batch_size if FLAGS.batch_size < 200 else 1
+    dev_batch_size = 1
     # Get epoch
     epoch = next(gen_epochs(data_path=data_dir, total_epochs=1, batch_size=dev_batch_size,
                             vocab_size=FLAGS.vocab_size, phase="dev"))
@@ -640,7 +640,7 @@ def restore_model(sess, save_dir, vocab_file, out_form):
     if out_form == "softmax":
         predictions = graph.get_tensor_by_name("predictions:0")
     else:
-        predictions = graph.get_tensor_by_name("fully_connected/Tanh:0")
+        predictions = graph.get_tensor_by_name("fully_connected/Relu:0")
     
     # Get loss tensor
     loss = graph.get_tensor_by_name("total_loss:0")
