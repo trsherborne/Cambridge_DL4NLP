@@ -110,6 +110,8 @@ tf.app.flags.DEFINE_string("out_form", "cosine", "Type of output loss FOR EVAL O
 tf.app.flags.DEFINE_string("optimizer","Adam", "Type of optimizer for tf.train.optimize_loss "
                                                "['Adagrad','Adam','Ftrl','Momentum','RMSProp','SGD']")
 
+tf.app.flags.DEFINE_float("lstm_dropout_prob", 0.7, "LSTM dropout probability")
+
 FLAGS = tf.app.flags.FLAGS
 
 tf.logging.set_verbosity(tf.logging.INFO)
@@ -288,6 +290,11 @@ def build_model(max_seq_len, vocab_size, emb_size, learning_rate, encoder_type,
         # RNN encoder for the definitions.
         if encoder_type == "recurrent":
             cell = tf.nn.rnn_cell.LSTMCell(emb_size)
+            cell = tf.contrib.rnn.DropoutWrapper(
+                cell,
+                input_keep_prob=FLAGS.lstm_dropout_prob,
+                output_keep_prob=FLAGS.lstm_dropout_prob)
+            
             # state is the final state of the RNN.
             _, state = tf.nn.dynamic_rnn(cell, embs, dtype=tf.float32)
             # state is a pair: (hidden_state, output)
