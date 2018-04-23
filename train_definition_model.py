@@ -476,6 +476,7 @@ def train_network(model, num_epochs, batch_size, data_dir, save_dir, eval_save_d
         print("Total data points seen during training: %s or %d epochs of %d datapoints" % (num_training,
                                                                                             num_epochs,
                                                                                             num_training/num_epochs))
+        saver.save(sess, save_dir, global_step=tf.train.global_step(sess, global_step))
         return save_dir, saver
 
 
@@ -805,9 +806,9 @@ def main(_):
                 
                 # Load the final saved model and run querying routine.
                 
-                # query_model(sess, input_node, predictions,
-                #            vocab, rev_vocab, FLAGS.max_seq_len, embs=pre_embs,
-                #            out_form="cosine")
+                query_model(sess, input_node, predictions,
+                           vocab, rev_vocab, FLAGS.max_seq_len, embs=pre_embs,
+                           out_form=FLAGS.out_form)
 
 
 if __name__ == "__main__":
