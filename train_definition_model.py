@@ -471,12 +471,12 @@ def train_network(model, num_epochs, batch_size, data_dir, save_dir, eval_save_d
                            global_step=idx,
                            out_form=out_form,
                            verbose=True)
-            
+            saver.save(sess, save_dir, global_step=tf.train.global_step(sess, global_step))
+
         print("Elapsed training time %.2f hours" % ((time()-start_time)/(60*60)))
         print("Total data points seen during training: %s or %d epochs of %d datapoints" % (num_training,
                                                                                             num_epochs,
                                                                                             num_training/num_epochs))
-        saver.save(sess, save_dir, global_step=tf.train.global_step(sess, global_step))
         return save_dir, saver
 
 
