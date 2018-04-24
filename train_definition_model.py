@@ -387,7 +387,7 @@ def build_model(max_seq_len, vocab_size, emb_size, learning_rate, encoder_type,
         return gloss_in, head_in, total_loss, train_step, output_form, learning_rate, global_step
 
 
-def train_network(model, num_epochs, batch_size, data_dir, save_dir, eval_save_dir,
+def train_network(model, num_epochs, batch_size, data_dir, save_dir, eval_save_dir, best_save_dir,
                   vocab, rev_vocab, vocab_size, name="model", eval_embs=None, verbose=True):
     
     tf.logging.info("Model checkpoints to be saved in %s..." % save_dir)
@@ -415,6 +415,8 @@ def train_network(model, num_epochs, batch_size, data_dir, save_dir, eval_save_d
     
     for var in tf.trainable_variables():
         print("VAR -> %s" % var.op.name)
+    
+    minimal_median = 100
     
     with tf.Session(config=tf.ConfigProto(allow_soft_placement=True)) as sess:
         
@@ -458,7 +460,7 @@ def train_network(model, num_epochs, batch_size, data_dir, save_dir, eval_save_d
                                                             })
             
             # Run evaluation after each epoch
-            evaluate_model(sess=sess,
+            new_median = evaluate_model(sess=sess,
                            data_dir=data_dir,
                            input_node=gloss_in,
                            target_node=head_in,
@@ -471,7 +473,11 @@ def train_network(model, num_epochs, batch_size, data_dir, save_dir, eval_save_d
                            global_step=idx,
                            out_form=out_form,
                            verbose=True)
-            saver.save(sess, save_dir, global_step=tf.train.global_step(sess, global_step))
+            
+            if new_median < minimal_median:
+                tf.logging.info("Saving new best model with rank %d" % new_median)
+                saver.save(sess, best_save_dir, global_step=tf.train.global_step(sess, global_step))
+                minimal_median = new_median
 
         print("Elapsed training time %.2f hours" % ((time()-start_time)/(60*60)))
         print("Total data points seen during training: %s or %d epochs of %d datapoints" % (num_training,
@@ -598,6 +604,8 @@ def evaluate_model(sess, data_dir, input_node, target_node, prediction, loss,
         )
         f.write("rank,%.1f,mad,%.1f,loss,%.5f,stddev,%.4f\n" %
                 (rank_avg_median, rank_avg_mad, loss_avg_mean, loss_avg_std))
+        
+    return rank_avg_median
     
 
 def restore_model(sess, save_dir, vocab_file, out_form):
@@ -704,6 +712,7 @@ def main(_):
     
     train_save_dir = FLAGS.save_dir + os.sep + FLAGS.exp_tag + os.sep + "train"
     eval_save_dir = FLAGS.save_dir + os.sep + FLAGS.exp_tag + os.sep + "eval"
+    best_save_dir = FLAGS.save_dir + os.sep + FLAGS.exp_tag + os.sep + "best"
     
     if not tf.gfile.IsDirectory(train_save_dir):
         tf.logging.info("Creating save_dir in %s..." % train_save_dir)
@@ -765,6 +774,7 @@ def main(_):
             FLAGS.data_dir,
             train_save_dir,
             eval_save_dir,
+            best_save_dir,
             vocab=vocab,
             rev_vocab=rev_vocab,
             vocab_size=FLAGS.vocab_size,
